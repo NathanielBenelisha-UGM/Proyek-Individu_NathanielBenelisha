@@ -1,0 +1,402 @@
+% =========================================================
+% DRAFT - Frequency-Constrained Unit Commitment with
+% Multi-Source Virtual Inertia from Inverter-Based Resources
+% Author  : Nathaniel Benelisha (UGM)
+% Version : v0.1 - Draft (30 August 2026)
+% Target  : IEEE Access / Energies (MDPI)
+% STATUS  : \RESULT{X} = placeholder, replace after simulation
+% =========================================================
+
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{xcolor}
+\newcommand{\RESULT}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+\begin{document}
+
+\title{Frequency-Constrained Unit Commitment with\\
+Multi-Source Virtual Inertia Provision from\\
+Inverter-Based Resources}
+
+\author{Nathaniel~Benelisha~and~Lesnanto~Multa~Putranto,~\IEEEmembership{Ph.D., IPM., SMIEEE}
+\thanks{Department of Electrical Engineering and Information Technology,
+Universitas Gadjah Mada, Yogyakarta 55281, Indonesia.
+E-mail: nathanielbenelisha@mail.ugm.ac.id}}
+\maketitle
+
+% =========================================================
+\begin{abstract}
+The rapid proliferation of Inverter-Based Resources
+(IBR)---including solar photovoltaic (PV), wind turbines,
+and Battery Energy Storage Systems (BESS)---reduces natural
+rotational inertia, causing higher Rate of Change of
+Frequency (RoCoF) and deeper frequency nadirs after N-1
+contingencies. This paper proposes an enhanced
+Frequency-Constrained Unit Commitment (FCUC) that
+co-optimizes conventional generator scheduling and virtual
+inertia from BESS, solar PV, and wind turbines simultaneously
+within a Mixed-Integer Linear Programming (MILP) framework.
+A two-stage linearization converts the nonlinear frequency
+nadir constraint into a tractable linear form. RoCoF, nadir,
+and quasi-steady-state (QSS) constraints are enforced under
+worst-case N-1 contingency. Case studies on a modified IEEE
+10-unit system (20\%--80\% IBR penetration) show the
+proposed model achieves \RESULT{COST\_SAVING}\% lower cost
+versus synchronous-generator-only inertia, with implications
+for Indonesia's RUPTL 2025--2034 renewable targets.
+\end{abstract}
+
+\begin{IEEEkeywords}
+FCUC, Virtual Inertia, IBR, BESS, RoCoF, Frequency Nadir, MILP.
+\end{IEEEkeywords}
+
+% =========================================================
+\section{Introduction}
+
+\subsection{Motivation}
+Indonesia's RUPTL 2025--2034 targets 69.5~GW of new
+generation with 61\% from renewables~\cite{PLN2025}.
+Increasing IBR penetration reduces system inertia, causing
+higher RoCoF~\cite{Tielens2016} and deeper nadirs below the
+Indonesian UFLS threshold of 49.0~Hz~\cite{ESDM2007}.
+High-profile incidents (South Australia 2016, Great Britain
+2019) demonstrate these risks~\cite{AEMO2017}.
+
+\subsection{Literature Review}
+Classical MILP UC minimizes cost but ignores frequency
+dynamics~\cite{Padhy2004}. Wen \textit{et al.}~\cite{Wen2016}
+first embedded analytical RoCoF and nadir constraints with
+BESS (foundational FCUC paper). Chu \textit{et al.}~\cite{Chu2020}
+co-optimized synthetic inertia from wind in a stochastic UC.
+Shi \textit{et al.}~\cite{Shi2025} linearized the nadir
+constraint via two-stage regression. Indonesian studies on
+Sulawesi~\cite{Sulawesi2024} and JAMALI~\cite{JAMALI2025}
+provide local benchmarks.
+
+\subsection{Contributions}
+\begin{enumerate}
+  \item Multi-source VI FCUC: unified MILP with BESS,
+    solar PV, and wind VI simultaneously.
+  \item Extended nadir linearization incorporating IBR VI.
+  \item Cost-security trade-off across 20\%--80\% IBR.
+  \item Indonesia RUPTL 2025--2034 alignment.
+\end{enumerate}
+
+% =========================================================
+\section{System Modeling}
+\label{sec:model}
+
+\subsection{Conventional Generator}
+Quadratic fuel cost:
+\begin{equation}
+  C_i^{gen}(P_{i,t}) = a_i P_{i,t}^2 + b_i P_{i,t} + c_i
+  \label{eq:cost}
+\end{equation}
+Inertia constant {SG,i}$ [MWs/MVA] (typical: 2--9~s).
+
+\subsection{BESS Model}
+SoC dynamics ($\eta_c$, $\eta_d$ = efficiencies):
+\begin{equation}
+  E_t = E_{t-1} + \eta_c P_{c,t}\Delta t
+          - \frac{1}{\eta_d}P_{d,t}\Delta t
+  \label{eq:soc}
+\end{equation}
+Virtual inertia via grid-forming control:
+\begin{equation}
+  H_{VI,BESS,t} = K_{VI}^{BESS}\frac{P_{BESS,t}^{avail}}{S_{sys}}
+  \label{eq:hbess}
+\end{equation}
+
+\subsection{Solar PV (PLTS)}
+Synthetic inertia loop:
+\begin{equation}
+  H_{VI,PV,t} = K_{VI}^{PV}\frac{P_{PV,t}}{S_{sys}}
+  \label{eq:hpv}
+\end{equation}
+Deloading: {PV,t} \leq (1-\delta_{PV})P_{PV,t}^{avail}$.
+
+\subsection{Wind Turbine (PLTB)}
+Rotor kinetic energy extraction~\cite{Chu2020}:
+\begin{equation}
+  H_{VI,WT,t} = K_{VI}^{WT}\frac{P_{WT,t}}{S_{sys}}
+  \label{eq:hwt}
+\end{equation}
+Deloading: {WT,t} \leq (1-\delta_{WT})P_{WT,t}^{avail}$.
+
+\subsection{Total System Inertia}
+\begin{equation}
+  H_{sys,t} = \!\sum_{i\in\mathcal{G}}\!
+    \frac{H_{SG,i}S_i}{S_{sys}}u_{i,t}
+    + H_{VI,BESS,t} + H_{VI,PV,t} + H_{VI,WT,t}
+  \label{eq:hsys}
+\end{equation}
+
+\subsection{System Frequency Response}
+Post-contingency swing equation:
+\begin{equation}
+  2H_{sys,t}\frac{d(\Delta f)}{dt}
+    = -\Delta P_{loss} + \Delta P_{gov}
+    + \Delta P_{VI} - D\Delta f
+  \label{eq:swing}
+\end{equation}
+Key metrics:
+\begin{align}
+  \text{RoCoF} &=
+    \frac{f_0\,\Delta P_{loss}}{2H_{sys,t}S_{sys}}
+  \label{eq:rocof}\\
+  \Delta f_{QSS} &=
+    \frac{f_0\,\Delta P_{loss}}{DS_{sys}+R_{sys,t}}
+  \label{eq:qss}
+\end{align}
+where {sys,t}=\sum_i R_i u_{i,t}+R_{VI,t}$ is droop.
+
+% =========================================================
+\section{FCUC Formulation}
+\label{sec:formulation}
+
+\subsection{Objective Function}
+\begin{equation}
+  \min\!\sum_{t=1}^T\!\Bigg[\sum_{i\in\mathcal{G}}
+    \!\Big(C_i^{gen}+C_i^{SU}v_{i,t}+C_i^{SD}w_{i,t}\Big)
+    + c_{deg}(P_{d,t}+P_{c,t})\Delta t\Bigg]
+  \label{eq:obj}
+\end{equation}
+
+\subsection{Standard UC Constraints}
+Power balance, generation limits, ramp rates, min up/down
+times, logical consistency, and spinning reserve follow
+standard MILP UC formulations~\cite{Padhy2004}.
+
+\subsection{BESS Constraints}
+SoC~\eqref{eq:soc}, bounds ^{min}\!\leq E_t\!\leq E^{max}$,
+VI headroom \!\geq E^{min}+E^{VI}$, power limits,
+charge/discharge exclusivity, daily neutrality =E_0$.
+
+\subsection{IBR Constraints}
+Output within available capacity; VI limited by
+\eqref{eq:hpv}--\eqref{eq:hwt} and available generation.
+
+\subsection{Frequency Security Constraints}
+N-1 loss of largest committed unit (linearized via Big-M):
+\begin{equation}
+  \Delta P_{loss,t}\!\geq P_{i,t}\!-M(1-\phi_{i,t}),\;
+  \sum_i\phi_{i,t}=1
+  \label{eq:bigm}
+\end{equation}
+
+\textbf{RoCoF} (from \eqref{eq:rocof}):
+\begin{equation}
+  H_{sys,t} \geq
+    \frac{f_0\,\Delta P_{loss,t}}
+         {2\,\text{RoCoF}^{max}\,S_{sys}}
+  \label{eq:rocof_con}
+\end{equation}
+
+\textbf{Nadir (two-stage linearization,}
+extended from~\cite{Shi2025}\textbf{):}
+\begin{equation}
+  \alpha_0+\alpha_1 H_{sys,t}+\alpha_2 R_{sys,t}
+  +\alpha_3\Delta P_{loss,t}
+  \leq \Delta f^{max}
+  \label{eq:nadir_con}
+\end{equation}
+Coefficients from 5000-sample SFR regression.
+
+\textbf{QSS} (from \eqref{eq:qss}):
+\begin{equation}
+  R_{sys,t} \geq
+    \frac{f_0\,\Delta P_{loss,t}}
+         {\Delta f_{QSS}^{max}S_{sys}} - DS_{sys}
+\end{equation}
+\textbf{Min inertia:} {sys,t}\geq H_{sys}^{min}$.
+
+% =========================================================
+\section{Case Study}
+\label{sec:casestudy}
+
+\subsection{Test System}
+Modified IEEE 10-unit system~\cite{Kazarlis1996};
+=24$~h, $\Delta t=1$~h. Generator parameters in
+Table~\ref{tab:gen}; IBR/BESS in Table~\ref{tab:ibr};
+frequency limits in Table~\ref{tab:freq}.
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Generator Parameters~\cite{Kazarlis1996}}
+\label{tab:gen}\centering\footnotesize
+\begin{tabular}{ccccccc}
+\toprule
+Unit&^{min}$&^{max}$&$&$&$&{SG}$\\
+&[MW]&[MW]&[\$/MW2]&[\$/MWh]&[\$/h]&[s]\\
+\midrule
+G1 &150&455&0.00048&16.19&1000&5.0\\
+G2 &150&455&0.00031&17.26& 970&5.0\\
+G3 & 20&130&0.00200&16.60& 700&4.0\\
+G4 & 20&130&0.00211&16.50& 680&4.0\\
+G5 & 25&162&0.00398&19.70& 450&4.0\\
+G6 & 20& 80&0.00712&22.26& 370&3.5\\
+G7 & 25& 85&0.00898&27.74& 480&3.5\\
+G8 & 10& 55&0.00413&25.92& 660&3.0\\
+G9 & 10& 55&0.00222&27.27& 665&3.0\\
+G10& 10& 55&0.00173&27.79& 670&3.0\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{IBR/BESS Parameters}
+\label{tab:ibr}\centering\footnotesize
+\begin{tabular}{lrc}
+\toprule
+Parameter&Value&Unit\\\midrule
+BESS power/energy&200/400&MW/MWh\\
+SoC limits&10\%--90\%&---\\
+$\eta_c$, $\eta_d$&0.95, 0.95&---\\
+{deg}$&5.0&\$/MWh\\
+{VI}^{BESS}$&10&---\\
+Wind capacity&300&MW\\
+Solar PV capacity&200&MW\\
+{VI}^{WT}$/{VI}^{PV}$&3.5/2.5&---\\
+{sys}$, $&3000, 1.0&MVA, p.u.\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Frequency Security Limits}
+\label{tab:freq}\centering\footnotesize
+\begin{tabular}{lrc}
+\toprule
+Limit&Value&Unit\\\midrule
+$&50&Hz\\
+RoCoF{max}$&0.5&Hz/s\\
+{nadir}^{min}$&49.0&Hz\\
+{QSS}^{min}$&49.5&Hz\\
+{sys}^{min}$&3.0&MWs/MVA\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Demand profile: Kazarlis benchmark (peak 1500~MW),
+spinning reserve = 10\% of hourly load.
+
+\subsection{Scenarios}
+S0: Classical UC (no freq.\ constraints, 0\% IBR).
+S1: FCUC, SG inertia only (0\% IBR).
+S2: FCUC + BESS VI (40\% IBR).
+S3: FCUC + BESS + Wind VI (40\% IBR).
+S4: Proposed---BESS+Wind+Solar VI (40\% IBR).
+S5: Proposed at 60\% IBR.
+S6: Proposed at 80\% IBR.
+
+% =========================================================
+\section{Results and Discussion}
+\label{sec:results}
+
+\subsection{Nadir Linearization Validation}
+The linearized nadir~\eqref{eq:nadir_con} achieves
+MAE~=~\RESULT{MAE}~Hz, max error~=~\RESULT{MAXERR}~Hz,
+^2$~=~\RESULT{R2} over \RESULT{NPTS} test points.
+
+\subsection{S0 vs.\ S1: Classical UC vs.\ FCUC}
+S0 costs \RESULT{S0COST}~\$/day but produces
+RoCoF~=~\RESULT{S0ROCOF}~Hz/s (violates in
+\RESULT{S0VIO}~periods) and nadir~=~\RESULT{S0NAD}~Hz.
+S1 (FCUC): cost \RESULT{S1COST}~\$/day
+(+\RESULT{S1PREM}\%), all constraints satisfied.
+
+\subsection{S2--S4: Multi-Source VI at 40\% IBR}
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Performance at 40\% IBR Penetration}
+\label{tab:s234}\centering\footnotesize
+\begin{tabular}{lccc}\toprule
+Metric&S2&S3&S4 (Proposed)\\\midrule
+Cost [\$/d]&\RESULT{S2C}&\RESULT{S3C}&\RESULT{S4C}\\
+Saving vs S1 [\%]&\RESULT{S2SV}&\RESULT{S3SV}&\RESULT{S4SV}\\
+Min {sys}$&\RESULT{S2H}&\RESULT{S3H}&\RESULT{S4H}\\
+Max RoCoF [Hz/s]&\RESULT{S2R}&\RESULT{S3R}&\RESULT{S4R}\\
+Min nadir [Hz]&\RESULT{S2N}&\RESULT{S3N}&\RESULT{S4N}\\
+\bottomrule\end{tabular}\end{table}
+
+\textit{Finding 1:} S4 reduces cost by \RESULT{S4SV}\%
+vs.\ BESS-only S2 (fewer must-run thermal units needed).
+
+\subsection{S4--S6: IBR Penetration Sweep}
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Results vs.\ IBR Penetration (Proposed Model)}
+\label{tab:sweep}\centering\footnotesize
+\begin{tabular}{lccc}\toprule
+Metric&S4 (40\%)&S5 (60\%)&S6 (80\%)\\\midrule
+Cost [\$/d]&\RESULT{S4C2}&\RESULT{S5C}&\RESULT{S6C}\\
+SG inertia [\%]&\RESULT{S4SGI}&\RESULT{S5SGI}&\RESULT{S6SGI}\\
+IBR VI total [\%]&\RESULT{S4VII}&\RESULT{S5VII}&\RESULT{S6VII}\\
+-- BESS [\%]&\RESULT{S4VB}&\RESULT{S5VB}&\RESULT{S6VB}\\
+-- Wind [\%]&\RESULT{S4VW}&\RESULT{S5VW}&\RESULT{S6VW}\\
+-- Solar [\%]&\RESULT{S4VP}&\RESULT{S5VP}&\RESULT{S6VP}\\
+\bottomrule\end{tabular}\end{table}
+
+\textit{Finding 2:} IBR VI share grows from
+\RESULT{S4VII}\% to \RESULT{S6VII}\% as penetration
+rises from 40\% to 80\%.
+\textit{Finding 3:} At 80\% IBR, only the proposed
+multi-source approach finds a feasible frequency-secure
+schedule.
+
+\subsection{Economic Summary}
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Economic and Security Summary}
+\label{tab:economic}\centering\footnotesize
+\begin{tabular}{lccl}\toprule
+Scenario&Cost [\$/d]&vs.\ S0 [\%]&Secure\\\midrule
+S0 (Classic)&\RESULT{EC0}&---&$\times$\\
+S1 (SG only)&\RESULT{EC1}&+\RESULT{EP1}&$\surd$\\
+S2 (BESS)   &\RESULT{EC2}&+\RESULT{EP2}&$\surd$\\
+S4 (40\%)   &\RESULT{EC4}&+\RESULT{EP4}&$\surd$\\
+S5 (60\%)   &\RESULT{EC5}&+\RESULT{EP5}&$\surd$\\
+S6 (80\%)   &\RESULT{EC6}&+\RESULT{EP6}&$\surd$\\
+\bottomrule\end{tabular}\end{table}
+
+\textit{Finding 4:} Security premium decreases with IBR
+penetration; at $\approx$\RESULT{BEVEN}\% IBR, cost of
+multi-source FCUC approaches classical UC.
+
+% =========================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Multi-source virtual inertia FCUC is essential for
+high-IBR power systems. Key conclusions:
+(1)~Proposed model achieves \RESULT{FSAV}\% lower cost
+than SG-only FCUC while satisfying all frequency
+constraints at all tested IBR levels.
+(2)~Extended two-stage nadir linearization achieves
+\RESULT{FMAE}~Hz MAE and solves in \RESULT{FTIME}~s.
+(3)~At 80\% IBR, multi-source VI enables feasibility
+where single-source fails.
+(4)~For Indonesia's RUPTL 2025--2034 (61\% renewables
+by 2034), planned BESS and IBR assets can satisfy
+inertia requirements without disproportionate cost.
+Future work: stochastic UC; DC network constraints;
+JAMALI/Sulawesi validation; joint angle+frequency stability.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{20}
+\bibitem{PLN2025}PLN, `RUPTL PLN 2025--2034,'' 2025.
+\bibitem{Tielens2016}P.~Tielens and D.~Van~Hertem, \textit{Renew. Sustain. Energy Rev.}, 55, 999--1009, 2016.
+\bibitem{ESDM2007}Permen ESDM No. 3/2007: Aturan Jaringan Jawa-Madura-Bali.
+\bibitem{AEMO2017}AEMO, `Black System SA 2016 -- Final Report,'' 2017.
+\bibitem{Padhy2004}N.~Padhy, \textit{IEEE Trans. Power Syst.}, 19(2), 1196--1205, 2004.
+\bibitem{Wen2016}Y.~Wen \textit{et al.}, \textit{IEEE Trans. Power Syst.}, 31(6), 5115--5125, 2016.
+\bibitem{Chu2020}Z.~Chu \textit{et al.}, \textit{IEEE Trans. Power Syst.}, 35(5), 4056--4066, 2020.
+\bibitem{Shi2025}Q.~Shi \textit{et al.}, \textit{IEEE Trans. Power Syst.}, 40(4), 3584--3587, 2025.
+\bibitem{Sulawesi2024}[Authors], Unit Commitment with PFR, Southern Sulawesi, 2024.
+\bibitem{JAMALI2025}[Authors], Unit Commitment with FFR, JAMALI, ICT-PEP, 2025.
+\bibitem{Kazarlis1996}S.~A.~Kazarlis \textit{et al.}, \textit{IEEE Trans. Power Syst.}, 11(1), 83--92, 1996.
+\bibitem{Kundur1994}P.~Kundur, \textit{Power System Stability and Control}, McGraw-Hill, 1994.
+\bibitem{Anderson1990}P.~M.~Anderson and M.~Mirheydar, \textit{IEEE Trans. Power Syst.}, 5(3), 720--729, 1990.
+\bibitem{Asiedu2025}S.~T.~Asiedu \textit{et al.}, \textit{IEEE Access}, 13, 2025.
+\end{thebibliography}
+
+\end{document}
