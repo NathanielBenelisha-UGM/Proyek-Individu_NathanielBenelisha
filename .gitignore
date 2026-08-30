@@ -1,0 +1,11 @@
+# Temporary files
+~$*
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Draft files (optional - comment out if you want to track drafts)
+# draf*
