@@ -62,26 +62,30 @@ Penelitian ini menghadirkan kerangka optimasi **Frequency-Constrained Unit Commi
 
 ```mermaid
 flowchart TD
-    subgraph Data Input
-        A[Dataset Generator Thermal G1-G10] --> D[Pyomo MILP Model]
-        B[Beban Sistem 24 Jam 1168 MW avg / 1500 MW peak] --> D
-        C[Profil EBT: PLTB 400 MW & PLTS + BESS 200 MW/400 MWh] --> D
+    subgraph DI ["Data Input"]
+        A["Dataset Generator Thermal G1-G10"] --> D["Pyomo MILP Model"]
+        B["Beban Sistem 24 Jam (1168 MW avg / 1500 MW peak)"] --> D
+        C["Profil EBT: PLTB 400 MW & PLTS + BESS 200 MW/400 MWh"] --> D
     end
 
-    subgraph Optimasi MILP (Python + IBM CPLEX 22.1.1)
-        D --> E{Formulasi FCUC}
-        E -->|Objektif| F[Min Total Cost: Fuel + Fixed + Startup]
-        E -->|Batasan Frekuensi| G[RoCoF Constraint & PFR Droop Governor]
-        E -->|Alokasi Daya BESS| H[Coupled Discharging & VI Headroom]
-        F & G & H --> I[Jadwal Komitmen Unit & Dispatch Optimal]
+    subgraph OPT ["Optimasi MILP (Python + IBM CPLEX 22.1.1)"]
+        D --> E{"Formulasi FCUC"}
+        E -->|Objektif| F["Min Total Cost: Fuel + Fixed + Startup"]
+        E -->|Batasan Frekuensi| G["RoCoF Constraint & PFR Droop Governor"]
+        E -->|Alokasi Daya BESS| H["Coupled Discharging & VI Headroom"]
+        F --> I["Jadwal Komitmen Unit & Dispatch Optimal"]
+        G --> I
+        H --> I
     end
 
-    subgraph Validasi Transien Dinamis (DIgSILENT PowerFactory)
-        I --> J[Import Jadwal UC ke DIgSILENT]
-        J --> K[Simulasi Kontingensi N-1 Trip Unit Terbesar]
-        J --> L[Simulasi Unit De-commitment Jam Beban Rendah]
-        J --> M[Simulasi All-Units Online High-Inertia Baseline]
-        K & L & M --> N[Kurva Respon Frekuensi f_t, RoCoF, & Nadir Compliance]
+    subgraph VAL ["Validasi Transien Dinamis (DIgSILENT PowerFactory)"]
+        I --> J["Import Jadwal UC ke DIgSILENT"]
+        J --> K["Simulasi Kontingensi N-1 Trip Unit Terbesar"]
+        J --> L["Simulasi Unit De-commitment Jam Beban Rendah"]
+        J --> M["Simulasi All-Units Online High-Inertia Baseline"]
+        K --> N["Kurva Respon Frekuensi f(t), RoCoF, & Nadir Compliance"]
+        L --> N
+        M --> N
     end
 ```
 

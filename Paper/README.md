@@ -1,6 +1,6 @@
 # 📁 Paper — Publikasi Ilmiah & Draf Naskah
 
-Folder ini memuat seluruh naskah manuskrip publikasi ilmiah dalam format **LaTeX (IEEEtran)** dan kompilasi PDF. Naskah ini disiapkan sebagai luaran pengganti Skripsi / Tugas Akhir di Departemen Teknik Elektro dan Teknologi Informasi, Fakultas Teknik, Universitas Gadjah Mada.
+Folder ini memuat naskah draf publikasi ilmiah dalam format PDF yang siap diunduh dan ditinjau. Naskah ini disiapkan sebagai luaran pengganti Skripsi / Tugas Akhir di Departemen Teknik Elektro dan Teknologi Informasi, Fakultas Teknik, Universitas Gadjah Mada.
 
 ---
 
@@ -10,7 +10,6 @@ Folder ini memuat seluruh naskah manuskrip publikasi ilmiah dalam format **LaTeX
 |------|--------|------------|
 | 📥 **[PI_Draf5.pdf](PI_Draf5.pdf)** | ⭐ **LATEST DRAFT** | Versi draf paling mutakhir (Draf 5) — memuat penyelarasan formulasi Cost & PFR dari referensi `[E02]`, pemodelan inersia virtual khusus BESS dengan *converter headroom coupling*, neraca daya terpadu PV & Wind, dan metodologi validasi transien DIgSILENT PowerFactory. |
 | 🔗 **[LATEST_DRAFT.pdf](LATEST_DRAFT.pdf)** | 🔄 **Pointer Terkini** | File mirror yang selalu merefleksikan draf terbaru agar tautan eksternal selalu valid. |
-| 📝 **[main_v2.tex](main_v2.tex)** | 🛠️ **Source LaTeX** | Kode sumber LaTeX IEEEtran versi 2 lengkap dengan 22 referensi ber-DOI tervalidasi. |
 
 ---
 
@@ -38,7 +37,7 @@ Folder ini memuat seluruh naskah manuskrip publikasi ilmiah dalam format **LaTeX
 
 ## 🛠️ Panduan Pembaruan Draf untuk Git Upload
 
-Setiap kali Anda selesai mengompilasi naskah baru:
+Setiap kali Anda selesai memperbarui naskah:
 1. Simpan file PDF baru dengan format penamaan berurutan (misal: `PI_Draf5.pdf`, `PI_Draf6.pdf`, dst.) di folder `Paper/`.
 2. Salin atau perbarui file `LATEST_DRAFT.pdf`:
    ```bash
@@ -51,13 +50,3 @@ Setiap kali Anda selesai mengompilasi naskah baru:
    git push origin main
    ```
 
----
-
-## 💻 Cara Kompilasi LaTeX
-
-```bash
-# Kompilasi dokumen utama (disarankan 2 kali untuk sinkronisasi sitiran bibliografi)
-pdflatex main_v2.tex
-pdflatex main_v2.tex
-```
-*Dapat juga langsung dikompilasi secara online menggunakan Overleaf dengan engine pdfLaTeX.*
