@@ -35,7 +35,6 @@
 > Seluruh pembaruan paper ilmiah secara konsisten diunggah pada repositori ini:
 > * 📥 **[Buka / Unduh Naskah Draf Terbaru: PI_Draf5.pdf (Klik Disini)](Paper/PI_Draf5.pdf)**
 > * 🔗 **[Permanent Pointer: LATEST_DRAFT.pdf](Paper/LATEST_DRAFT.pdf)**
-> * 📝 **[Kode Sumber LaTeX: main_v2.tex](Paper/main_v2.tex)**
 >
 > *Status: **Draf 5 (Aktif)** — Penyelarasan formulasi biaya linear & PFR berdasarkan referensi `[E02]` ICITEE 2020, pemodelan inersia virtual khusus BESS dengan kopling alokasi daya discharging, neraca daya dengan PLTB & PLTS, serta validasi simulasi transien di DIgSILENT PowerFactory pada sistem IEEE 24-bus ekivalen 10 generator.*
 
@@ -148,12 +147,10 @@ Untuk memastikan hasil optimasi aljabar tidak hanya optimal di atas kertas melai
 ├── 📄 .gitignore                           # Konfigurasi file yang diabaikan Git
 ├── 📄 persiapan_bimbingan.md               # Catatan komprehensif review literatur & persiapan bimbingan
 │
-├── 📁 Paper/                               # Naskah publikasi ilmiah (LaTeX & PDF)
+├── 📁 Paper/                               # Naskah manuskrip publikasi ilmiah & dokumen PDF
 │   ├── 📥 PI_Draf5.pdf                     # ⭐ Draf naskah paper terbaru (Draf 5)
 │   ├── 🔗 LATEST_DRAFT.pdf                 # Mirror pointer ke draf mutakhir
 │   ├── 📄 PI_Draf1.pdf s.d. PI_Draf4.pdf  # Arsip riwayat draf naskah sebelumnya
-│   ├── 📄 main_v2.tex                      # Source LaTeX IEEEtran v2 (Cost, PFR E02, BESS VI, DigSilent)
-│   ├── 📄 main.tex                         # Source LaTeX awal (v1)
 │   ├── 📁 figures/                         # Gambar, diagram grafis, dan plot respon sistem
 │   └── 📄 README.md                        # Dokumentasi folder Paper
 │
@@ -214,11 +211,10 @@ Buka dan jalankan notebook:
 jupyter notebook "Coding/Coba_16_20260612_R00_vinertia_cplexdirect.ipynb"
 ```
 
-### 4. Mengompilasi Naskah LaTeX
-```bash
-cd Paper
-pdflatex main_v2.tex
-pdflatex main_v2.tex
+### 4. Mengakses Naskah Paper
+File PDF draf publikasi ilmiah terbaru dapat diakses dan diunduh langsung dari direktori:
+```
+Paper/PI_Draf5.pdf  (atau Paper/LATEST_DRAFT.pdf)
 ```
 
 ---
