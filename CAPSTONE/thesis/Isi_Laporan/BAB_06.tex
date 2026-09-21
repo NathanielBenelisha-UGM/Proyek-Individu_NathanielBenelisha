@@ -1,0 +1,291 @@
+Luaran (\textit{deliverable}) yang ditargetkan pada akhir periode proyek \textit{capstone} ditetapkan secara formal beserta spesifikasi teknis terukur sebagai indikator keberhasilan masing-masing luaran. Spesifikasi tersebut disusun dengan mengacu pada standar keteknikan internasional, meliputi IEEE, IEC, dan regulasi ESDM, sehingga kriteria keberhasilan dapat diverifikasi secara objektif dan independen.
+
+\section{Luaran yang Dijanjikan}
+\label{sec:Luaran_yang_Dijanjikan}
+
+Proyek \textit{capstone} ini berkomitmen untuk menghasilkan tiga luaran utama yang saling melengkapi. Penetapan luaran ini didasarkan pada analisis permasalahan, metode yang dipilih, dan kemampuan yang dapat dicapai dalam periode proyek dengan dukungan sumber daya dari mitra industri Schneider Electric. Ketiga luaran dipetakan ke kategori pada lembar luaran \textit{capstone} sebagaimana ditunjukkan pada Tabel~\ref{tab:luaran_dijanjikan}.
+
+\begin{longtable}{|p{0.8cm}|p{3.5cm}|p{3.5cm}|p{6.5cm}|}
+\caption{Luaran yang dijanjikan beserta kategori pada lembar luaran \textit{capstone}.}
+\label{tab:luaran_dijanjikan} \\
+\hline
+\textbf{No.} & \textbf{Luaran} & \textbf{Kategori (Lembar Luaran)} & \textbf{Deskripsi Ringkas} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Luaran} & \textbf{Kategori (Lembar Luaran)} & \textbf{Deskripsi Ringkas} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+L1 & Modul Perangkat Lunak OLS (\textit{Optimal Load Shedding} \& \textit{Recovery}) & \textit{Software} di PC & Aplikasi Python \textit{desktop} fungsional yang mengimplementasikan algoritma MILP-DC-AB secara lengkap: deteksi gangguan, \textit{solver} MILP, verifikasi tegangan \textit{post-hoc}, penjadwalan pemulihan adaptif, antarmuka GUI \textit{real-time}, dan modul komunikasi Modbus TCP ke PLC. \\ \hline
+L2 & Prototipe Sistem Terintegrasi SCADA-PLC & Prototipe/miniatur \textit{hardware/software}/sistem & Sistem semi-\textit{hardware} dengan modul L1 yang terhubung secara langsung ke PLC Schneider Electric melalui Modbus TCP serta diuji menggunakan skenario gangguan fisik dengan generator simulator dan \textit{load} simulator yang disediakan oleh mitra. Pengujian tersebut menghasilkan log SOE (\textit{Sequence of Events}) terstruktur untuk setiap skenario uji. \\ \hline
+L3 & Laporan Teknis Validasi dan Dokumentasi SOP & Dokumen (SOP, Laporan Teknis) & Laporan teknis komprehensif yang mendokumentasikan: hasil pengujian SIL dan HIL untuk semua skenario S1-S8, analisis metrik kinerja terukur, perbandingan kuantitatif terhadap \textit{baseline} UFLS konvensional, rekomendasi pengembangan lanjutan, dan SOP pengoperasian modul OLS untuk keperluan operator jaringan. \\
+\end{longtable}
+
+Luaran L1 merupakan inti teknis proyek dan menjadi prasyarat bagi L2. Luaran L2 memberikan bukti validasi yang lebih kuat karena melibatkan interaksi dengan perangkat keras industri nyata. Luaran L3 menjamin bahwa seluruh hasil dapat direproduksi, diaudit, dan dimanfaatkan oleh mitra industri maupun penelitian lanjutan.
+
+\subsection{Deskripsi Detail Luaran L1: Modul Perangkat Lunak OLS}
+\label{subsec:Deskripsi_Detail_Luaran_L1}
+
+Modul perangkat lunak OLS terdiri dari lima komponen fungsional yang terintegrasi dalam satu aplikasi \textit{desktop}:
+\begin{enumerate}
+    \item[a.] \textbf{\textit{SCADA Interface Module}.} Membaca data telemetri (tegangan, arus, frekuensi, status CB) dari PLC via Modbus TCP dengan periode \textit{polling} 100 ms dan menulis perintah \textit{trip/close} CB.
+    \item[b.] \textbf{\textit{State Estimator \& Contingency Detector}.} Memfilter sinyal frekuensi, menghitung RoCoF, mendeteksi \textit{trigger} gangguan, mengestimasi defisit daya $\Delta P$, dan memperbarui topologi jaringan secara \textit{real-time}.
+    \item[c.] \textbf{\textit{OLS Solver Engine}.} Menjalankan \textit{solver} MILP-DC (HiGHS via Pyomo) untuk menghasilkan keputusan pelepasan beban optimal, dilengkapi mekanisme \textit{fallback} SOCP bila diperlukan.
+    \item[d.] \textbf{\textit{Recovery Scheduler}.} Menjalankan LP berbobot adaptif untuk penjadwalan pemulihan bertahap dengan model CLPU dan logika \textit{gating} berbasis kondisi sistem \textit{real-time}.
+    \item[e.] \textbf{\textit{GUI \& SOE Logger}.} Menampilkan \textit{Single Line Diagram} (SLD) jaringan yang diperbarui dinamis, grafik frekuensi \textit{real-time}, tabel status CB, panel kontrol operator, dan mengekspor log SOE ke format CSV/Excel.
+\end{enumerate}
+
+\subsection{Deskripsi Detail Luaran L2: Prototipe Terintegrasi SCADA-PLC}
+\label{subsec:Deskripsi_Detail_Luaran_L2}
+
+Prototipe L2 merupakan realisasi fisik dari arsitektur yang telah dirancang, menggunakan perangkat keras yang disediakan oleh mitra industri Schneider Electric. Gambar \ref{fig:topologi_prototipe_l2} mengilustrasikan topologi sistem prototipe.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_6_1.png}
+    \caption{Topologi sistem prototipe L2: Modul OLS (PC) terhubung ke PLC Schneider Electric via Modbus TCP, yang mengontrol generator simulator, \textit{load} simulator, dan \textit{panel circuit breaker}.}
+    \label{fig:topologi_prototipe_l2}
+\end{figure}
+
+Pengujian prototipe L2 mengeksekusi seluruh skenario pada Tabel \ref{tab:skenario_pengujian_sil} dan merekam log SOE dengan resolusi waktu 1 ms untuk setiap aksi \textit{trip/close} CB. Log SOE ini menjadi alat utama yang membuktikan bahwa algoritma bekerja pada kondisi operasi semi-nyata dan menjadi bahan utama laporan teknis L3.
+
+\section{Spesifikasi Luaran}
+\label{sec:Spesifikasi_Luaran}
+
+Spesifikasi luaran ditetapkan berdasarkan tiga sumber acuan: standar teknis internasional yang relevan (IEEE, IEC, ESDM), target kinerja yang diturunkan dari model matematis dan parameter sistem uji, serta batasan operasional yang ditetapkan bersama mitra industri. Setiap spesifikasi dinyatakan dalam besaran terukur dengan satuan SI atau satuan per-unit (p.u.) yang baku.
+
+\subsection{Spesifikasi Kinerja Algoritma OLS}
+\label{subsec:Spesifikasi_Kinerja_Algoritma_OLS}
+
+Tabel~\ref{tab:spesifikasi_kinerja_ols} menetapkan spesifikasi kinerja algoritma yang harus dipenuhi oleh Luaran L1 sebagai syarat keberhasilan teknis.
+
+\begin{longtable}{|p{0.7cm}|p{3.5cm}|p{1.3cm}|p{1.2cm}|p{1.2cm}|p{2.3cm}|p{3.3cm}|}
+\caption{Spesifikasi kinerja algoritma OLS (Luaran L1).}
+\label{tab:spesifikasi_kinerja_ols} \\
+\hline
+\textbf{No.} & \textbf{Parameter Kinerja} & \textbf{Simbol} & \textbf{Nilai Target} & \textbf{Satuan} & \textbf{Standar Acuan} & \textbf{Metode Pengukuran} \\ \hline
+\endfirsthead
+
+\multicolumn{7}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Parameter Kinerja} & \textbf{Simbol} & \textbf{Nilai Target} & \textbf{Satuan} & \textbf{Standar Acuan} & \textbf{Metode Pengukuran} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+SP-01 & Akurasi pelepasan beban: selisih antara daya yang dilepas algoritma terhadap defisit aktual & $\epsilon$ & $<10$ & \% & Tidak ada standar eksplisit, diturunkan dari praktik industri dan literatur \cite{Sarwar2020, Arenas2026} & $\epsilon=|\sum P_{i,shed} - \Delta P_{deficit}|/\Delta P_{deficit}\times 100\%$, diukur pada setiap skenario S1-S4 \\ \hline
+SP-02 & \textit{Optimality gap solver} MILP: jarak antara solusi \textit{incumbent} dengan \textit{lower bound} & $\gamma_{gap}$ & $<1$ & \% & Praktik standar \textit{solver} MILP komersial \cite{Wolsey2021} & $\gamma_{gap}$ dilaporkan langsung oleh \textit{solver}, diverifikasi pada setiap \textit{run} \\ \hline
+SP-03 & Waktu komputasi: dari deteksi \textit{trigger} hingga perintah \textit{trip} CB pertama dikirim & $t_{comp}$ & $<5$ & detik & Diturunkan dari analisis dinamika frekuensi (\textit{window} sebelum $f\le 47.5$ Hz) & Dicatat oleh SOE \textit{logger} dengan resolusi 1 ms, diukur pada 50 \textit{run} berulang \\ \hline
+SP-04 & Waktu komputasi aspirasional (untuk jaringan $\le 30$ bus) & $t_{comp\_asp}$ & $<1$ & detik & Berbasis literatur \cite{Sarwar2020}, bergantung pada kompleksitas jaringan & Sama dengan SP-03, dievaluasi secara terpisah untuk sistem uji skala laboratorium \\ \hline
+SP-05 & Profil tegangan pasca-pelepasan: persentase bus yang memenuhi batas tegangan operasional & $V_{comp}$ & 100 & \% & Peraturan Menteri ESDM No. 3 Tahun 2007 \cite{PermenESDM2007}, IEC 60038:2009 \cite{IEC60038_2009} & Diverifikasi oleh Augmentasi-2 (NR AC \textit{post-hoc}), batas: $0.95 \text{ p.u.} \le V_{i} \le 1.05 \text{ p.u.}$ \\ \hline
+SP-06 & Perlindungan beban kritis: jumlah bus kritis yang tidak sengaja dilepas & $N_{crit,shed}$ & 0 & bus & Ditetapkan berdasarkan regulasi keselamatan fasilitas vital \cite{UU30_2009} & Diperiksa pada log SOE, setiap kejadian pelepasan bus kritis = kegagalan fatal \\ \hline
+SP-07 & Frekuensi nadir pasca-\textit{shedding}: nilai minimum frekuensi setelah pelepasan beban & $f_{nadir}$ & $>47.5$ & Hz & IEEE Std 1547-2018 \cite{IEEE1547_2018}, Peraturan Menteri ESDM \cite{PermenESDM2007} & Dibaca dari rekaman \textit{time-series} frekuensi SCADA selama skenario S1-S4 \\ \hline
+SP-08 & Deviasi frekuensi \textit{steady-state} pasca-pemulihan penuh & $\Delta f_{ss}$ & $\le\pm 0.5$ & Hz & IEEE Std 1547-2018 \cite{IEEE1547_2018}: rentang operasi normal & Dibaca dari rekaman frekuensi setelah seluruh beban dipulihkan, \textit{window} 30 s \\
+\end{longtable}
+
+\subsection{Spesifikasi Kinerja Pemulihan Pasca-Gangguan}
+\label{subsec:Spesifikasi_Kinerja_Pemulihan}
+
+Proses pemulihan pasca-gangguan dirancang untuk mengembalikan layanan kelistrikan secara aman dan bertahap tanpa memicu ketidakstabilan sistem. Spesifikasi yang ditetapkan mencakup urutan pemulihan berdasarkan prioritas beban, pembatasan langkah pemulihan dengan mempertimbangkan \textit{cold load pickup} dan cadangan daya, serta verifikasi kondisi frekuensi sebelum eksekusi \textit{circuit breaker}. Rincian target kinerja disajikan pada Tabel~\ref{tab:spesifikasi_kinerja_pemulihan}.
+
+\begin{longtable}{|p{0.7cm}|p{3.5cm}|p{1.6cm}|p{1.8cm}|p{1.2cm}|p{2cm}|p{2.7cm}|}
+\caption{Spesifikasi kinerja pemulihan (Luaran L1 \& L2).}
+\label{tab:spesifikasi_kinerja_pemulihan} \\
+\hline
+\textbf{No.} & \textbf{Parameter Kinerja} & \textbf{Simbol} & \textbf{Nilai Target} & \textbf{Satuan} & \textbf{Standar Acuan} & \textbf{Metode Pengukuran} \\ \hline
+\endfirsthead
+
+\multicolumn{7}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Parameter Kinerja} & \textbf{Simbol} & \textbf{Nilai Target} & \textbf{Satuan} & \textbf{Standar Acuan} & \textbf{Metode Pengukuran} \\ \hline
+\endhead
+
+
+\hline
+\endlastfoot
+
+SP-09 & Peningkatan kecepatan pemulihan dibanding prosedur manual: reduksi waktu total pemulihan & $\Delta t_{recovery}$ & $\ge 10$ & \% & Ditetapkan berdasarkan analisis literatur \cite{Dou2023} & Bandingkan $t_{auto}$ (log SOE) dengan $t_{manual}$ (prosedur standar operator) \\ \hline
+SP-10 & Kepatuhan urutan pemulihan: beban dengan prioritas lebih tinggi dipulihkan lebih dahulu & $P_{order}$ & 100 & \% & Diturunkan dari model prioritas beban Tabel~\ref{tab:klasifikasi_beban}, prinsip SLA kelistrikan \cite{UU30_2009} & Verifikasi urutan waktu \textit{close} CB pada SOE log terhadap urutan bobot $w_{i}$, setiap inversi = pelanggaran \\ \hline
+SP-11 & Batas beban maksimal yang diaktifkan per langkah pemulihan (termasuk faktor CLPU) & $P_{step}$ & $\le P_{reserve} - P_{margin}$ & MW & Praktik operasi \textit{standard}, diturunkan dari batasan & Dihitung dari log SOE: $\sum \alpha_{i} P_{i,shed}$ per langkah vs. cadangan pembangkit tercatat \\ \hline
+SP-12 & Frekuensi sistem saat \textit{close} CB pertama pada fase pemulihan & $f_{restore}$ & $\in[49.5;  50.5]$ & Hz & IEEE Std 1547-2018 \cite{IEEE1547_2018}, Permen ESDM No. 3/2007 \cite{PermenESDM2007} & Dibaca dari telemetri SCADA pada \textit{timestamp close} CB pertama \\
+\end{longtable}
+
+\subsection{Spesifikasi Antarmuka dan Integrasi Sistem (Luaran L1 \& L2)}
+\label{subsec:Spesifikasi_Antarmuka_dan_Integrasi}
+
+Integrasi antara modul OLS, PLC industri, dan antarmuka operator memerlukan spesifikasi komunikasi dan pertukaran data yang terstandarisasi. Parameter yang ditetapkan meliputi protokol Modbus TCP/IP, resolusi \textit{timestamp} pada log SOE, kebutuhan perangkat keras komputer, serta \textit{refresh rate} HMI. Rincian spesifikasi integrasi sistem disajikan pada Tabel~\ref{tab:spesifikasi_antarmuka}.
+
+\begin{longtable}{|p{0.8cm}|p{3.5cm}|p{4.5cm}|p{5cm}|}
+\caption{Spesifikasi antarmuka dan integrasi sistem.}
+\label{tab:spesifikasi_antarmuka} \\
+\hline
+\textbf{No.} & \textbf{Parameter} & \textbf{Nilai / Deskripsi} & \textbf{Standar Acuan} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Parameter} & \textbf{Nilai / Deskripsi} & \textbf{Standar Acuan} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+SI-01 & Protokol komunikasi SCADA-PLC & Modbus TCP/IP, port 502, \textit{polling interval} $\le 100$ ms & IEC 61158 \cite{IEC61158}, rekomendasi mitra Schneider Electric \\ \hline
+SI-02 & Format data telemetri yang dibaca & Tegangan (V), arus (A), frekuensi (Hz), status CB (0/1), presisi pembacaan $\ge 4$ digit signifikan & IEEE Std C37.118.1-2011: \textit{Synchrophasor Standard} \\ \hline
+SI-03 & Resolusi \textit{timestamp} log SOE & $\le 1$ ms (milidetik) & IEEE Std 1379-2000, IEC 61850-5 \cite{IEC61850_5_2013} \\ \hline
+SI-04 & Format ekspor SOE & CSV dan XLSX, kolom: \textit{timestamp, event\_type, bus\_id, value, unit} & IEC 61968-3: \textit{Distribution Network Operations} \\ \hline
+SI-05 & Platform perangkat lunak & Python $\ge 3.11$, semua dependensi \textit{open-source} (lihat Tabel~\ref{tab:stack_teknologi}) & - \\ \hline
+SI-06 & Kebutuhan komputasi minimum (\textit{hardware}) & CPU: Intel Core i5 generasi ke-10 atau setara, RAM: 8 GB, OS: Windows 10/11 atau Linux Ubuntu 22.04 & Ditetapkan berdasarkan profil beban komputasi \textit{solver} HiGHS \\ \hline
+SI-07 & Antarmuka GUI: pembaruan SLD & Frekuensi \textit{refresh} tampilan SLD dan grafik $\ge 5$ Hz ($\le 200 \text{ ms/\textit{frame}}$) & Rekomendasi ergonomi HMI industri (IEC 62655 Ed.1) \\ \hline
+SI-08 & Mekanisme \textit{failsafe} & Jika komunikasi Modbus TCP terputus $> 500$ ms, modul mengirim sinyal alarm dan menyerahkan kontrol ke UFLS \textit{hardware} relai & IEC 61511 \cite{IEC61511_2016}: \textit{Functional Safety}, prinsip \textit{failsafe} SIL-1 \\
+\end{longtable}
+
+\subsection{Spesifikasi Keamanan dan Keselamatan Operasional}
+\label{subsec:Spesifikasi_Keamanan_Operasional}
+
+Keamanan dan keselamatan operasional menjadi persyaratan utama dalam pengembangan sistem kendali kelistrikan. Spesifikasi yang ditetapkan mencakup perlindungan beban kritis, batas aman tegangan dan RoCoF, serta jaminan auditabilitas log operasi. Seluruh parameter keamanan dan keselamatan operasional dirangkum pada Tabel~\ref{tab:spesifikasi_keamanan}.
+
+\begin{longtable}{|p{0.8cm}|p{3.5cm}|p{5cm}|p{4.5cm}|}
+\caption{Spesifikasi keamanan dan keselamatan operasional.}
+\label{tab:spesifikasi_keamanan} \\
+\hline
+\textbf{No.} & \textbf{Parameter} & \textbf{Nilai / Persyaratan} & \textbf{Standar Acuan} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Parameter} & \textbf{Nilai / Persyaratan} & \textbf{Standar Acuan} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+SS-01 & Perlindungan beban kritis (\textit{hard constraint}) & Bus kritis tidak dapat dibuka oleh algoritma dalam kondisi apapun, dikunci melalui \textit{constraint} dan dikonfirmasi oleh \textit{interlock hardware} PLC & UU No. 30/2009 \cite{UU30_2009}, prinsip perlindungan fasilitas vital \\ \hline
+SS-02 & Batas tegangan operasional yang ditegakkan & $0.95 \text{ p.u.} \le V_{i} \le 1.05 \text{ p.u.}$ untuk semua bus, pelanggaran memicu Augmentasi-2 secara otomatis & Peraturan Menteri ESDM \cite{PermenESDM2007}, IEC 60038:2009 \cite{IEC60038_2009} \\ \hline
+SS-03 & Batas RoCoF untuk \textit{trigger} pelepasan beban & \textit{Trigger} aktif jika RoCoF $\le -0.5$ Hz/s atau $f\le 49.0 \text{ Hz}$. \textit{Threshold} ini tidak dapat diubah tanpa konfirmasi eksplisit dari supervisor & ENTSO-E Network Code, IEEE Std 1547-2018 \cite{IEEE1547_2018} \\ \hline
+SS-04 & Auditabilitas log SOE & Semua aksi algoritma dicatat dengan \textit{timestamp} presisi 1 ms dan tidak dapat dihapus atau dimodifikasi oleh operator biasa & IEC 61850-5 \cite{IEC61850_5_2013}, IEEE Std 1379-2000 \\ \hline
+SS-05 & Tidak ada aksi otomatis tanpa konfirmasi supervisor (mode semi-otomatis) & Pada mode semi-otomatis (\textit{default}), algoritma menghasilkan rekomendasi dan menampilkannya pada GUI, eksekusi membutuhkan konfirmasi operator dalam $\le 10$ detik sebelum \textit{auto-execute} & IEC 62655: \textit{Guidelines for Design of SCADA HMI}, prinsip \textit{human-in-the-loop} \\
+\end{longtable}
+
+\section{Kriteria Sukses Proyek}
+\label{sec:Kriteria_Sukses_Proyek}
+
+Proyek dinyatakan berhasil apabila seluruh kriteria sukses berikut terpenuhi. Kriteria dibagi menjadi tiga tingkatan: Wajib (\textit{must-have}), Diharapkan (\textit{should-have}), dan Bonus (\textit{nice-to-have}), mengacu pada prinsip MOSCOW dalam manajemen persyaratan rekayasa.
+
+\subsection{Kriteria Wajib (\textit{Must-Have}) Atau Proyek Gagal jika Tidak Terpenuhi}
+\label{subsec:Kriteria_Wajib}
+
+Kriteria wajib merupakan persyaratan fundamental yang menentukan keberhasilan proyek. Aspek yang dinilai mencakup keberhasilan algoritma MILP-DC-AB dalam mendeteksi dan mengeksekusi pelepasan beban, pemenuhan batas tegangan operasional, pencatatan log SOE yang terstruktur, serta keandalan komunikasi Modbus TCP dengan PLC. Kegagalan memenuhi salah satu kriteria ini dikategorikan sebagai kegagalan proyek.
+
+\begin{enumerate}
+    \item[a.] \textbf{Luaran L1 fungsional pada minimal skenario S1 dan S6 (K-W1):} Algoritma MILP-DC-AB mampu mendeteksi gangguan \textit{generation contingency} N-1, menghasilkan keputusan pelepasan beban $\{z_{i}^{*}\}$ dalam $t_{comp}<5$ detik, dan mengeksekusi fase pemulihan terstruktur. Tidak ada bus kritis yang dilepas $(N_{crit,shed}=0, \text{SP-06})$.
+    \item[b.] \textbf{Akurasi pelepasan beban $\epsilon<10\%$ pada skenario S1 (K-W2):} Selisih antara daya yang dilepas algoritma dan defisit aktual tidak melebihi 10\% dari nilai defisit (SP-01).
+    \item[c.] \textbf{Profil tegangan pasca-pelepasan memenuhi standar ESDM (K-W3):} Seluruh bus (100\%) berada dalam rentang 0.95 - 1.05 p.u. setelah pelepasan beban (SP-05), diverifikasi oleh Augmentasi-2.
+    \item[d.] \textbf{Log SOE terstruktur dihasilkan untuk setiap skenario uji (K-W4):} Setiap aksi \textit{trip/close} CB tercatat dengan \textit{timestamp} presisi $\le 1$ ms dalam format CSV yang dapat diekspor (SI-03, SI-04).
+    \item[e.] \textbf{Komunikasi Modbus TCP dengan PLC Schneider Electric berfungsi (K-W5):} Modul L1 berhasil membaca telemetri dan mengirimkan perintah CB ke \textit{hardware} PLC fisik minimal satu kali pada skenario HIL S1 (Luaran L2).
+\end{enumerate}
+
+\subsection{Kriteria Diharapkan (\textit{Should-Have}) Atau Penilaian Penuh jika Terpenuhi}
+\label{subsec:Kriteria_Diharapkan}
+
+Kriteria diharapkan mencakup target performa lanjutan untuk meningkatkan utilitas dan keandalan sistem. Parameter yang dinilai meliputi waktu komputasi yang cepat, keberhasilan pengujian pada seluruh skenario SIL, peningkatan kinerja pemulihan beban dibanding metode manual, kelengkapan dokumentasi teknis, serta responsivitas antarmuka HMI. Pemenuhan seluruh kriteria ini menunjukkan tingkat keberhasilan proyek yang optimal.
+
+\begin{enumerate}
+    \item[a.] \textbf{Waktu komputasi aspirasional $t_{comp}<1$ detik / SP-04 (K-S1):} Dicapai pada jaringan $\le 30$ bus dengan \textit{solver} HiGHS tanpa modifikasi \textit{hardware}.
+    \item[b.] \textbf{Seluruh 8 skenario (S1-S8) berhasil diuji pada SIL (K-S2):} Termasuk skenario inersia rendah S5 $(H_{eq}=2\text{ s})$ dan skenario CLPU S7.
+    \item[c.] \textbf{Peningkatan kecepatan pemulihan $\ge 10\%$ dibanding manual / SP-09 (K-S3):} Diukur dengan membandingkan log SOE fase pemulihan otomatis terhadap estimasi waktu prosedur manual berdasarkan SOP operator.
+    \item[d.] \textbf{Laporan teknis L3 lengkap dengan semua metrik SP-01 sampai dengan SP-12 (K-S4):} Termasuk tabel perbandingan kuantitatif terhadap \textit{baseline} UFLS statis.
+    \item[e.] \textbf{Antarmuka GUI menampilkan SLD dinamis dengan \textit{refresh} $\ge 5\text{ Hz}$ / SI-07 (K-S5):} Operator dapat melihat status CB, profil tegangan setiap bus, dan grafik frekuensi \textit{real-time} secara bersamaan selama algoritma berjalan.
+\end{enumerate}
+
+\subsection{Kriteria Bonus (\textit{Nice-to-Have}) Atau Nilai Tambah Proyek}
+\label{subsec:Kriteria_Bonus}
+
+Kriteria bonus mencakup fitur dan kemampuan tambahan yang memberikan nilai tambah bagi sistem. Aspek yang dievaluasi meliputi penanganan kontingensi ganda (N-2), validasi parameter \textit{cold load pickup} (CLPU) berbasis data historis, implementasi mekanisme \textit{fallback} SOCP untuk pelanggaran tegangan, serta penyediaan skrip simulasi \textit{open-source} yang terdokumentasi dan mudah direproduksi.
+
+\begin{enumerate}
+    \item[a.] \textbf{Berhasil menangani kontingensi ganda N-2 (skenario S4) (K-B1):} Keseluruhan formulasi diimplementasikan dan divalidasi.
+    \item[b.] \textbf{Estimasi parameter CLPU dari data historis PLC berhasil divalidasi (K-B2):} Dengan \textit{error} estimasi beban \textit{pick-up} $< 15\%$.
+    \item[c.] \textbf{Mekanisme \textit{fallback} SOCP (Augmentasi-2 Hasil C) teraktivasi dan tervalidasi (K-B3):} Pada minimal satu skenario yang memicu pelanggaran tegangan reaktif.
+    \item[d.] \textbf{Skrip simulasi \textit{open-source} terdokumentasi (K-B4):} Dan dapat dijalankan ulang secara independen oleh pihak ketiga tanpa modifikasi.
+\end{enumerate}
+
+\subsection{Matriks Kriteria Sukses vs. Spesifikasi}
+\label{subsec:Matriks_Kriteria_Sukses}
+
+Tabel \ref{tab:matriks_kriteria_sukses} memetakan setiap kriteria sukses ke spesifikasi teknis yang menjadi tolok ukurnya, sehingga verifikasi dapat dilakukan secara sistematis dan tidak ambigu.
+
+\begin{longtable}{|p{1.2cm}|p{2cm}|p{3.5cm}|p{3.5cm}|p{3.5cm}|}
+\caption{Matriks kriteria sukses, spesifikasi terkait, dan artefak bukti verifikasi.}
+\label{tab:matriks_kriteria_sukses} \\
+\hline
+\textbf{Kriteria} & \textbf{Tingkat} & \textbf{Spesifikasi Terkait} & \textbf{Metode Verifikasi} & \textbf{Alat Bukti} \\ \hline
+\endfirsthead
+
+\multicolumn{5}{c}%
+{{}} \\
+\hline
+\textbf{Kriteria} & \textbf{Tingkat} & \textbf{Spesifikasi Terkait} & \textbf{Metode Verifikasi} & \textbf{Alat Bukti} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+K-W1 & Wajib & SP-01, SP-06 & Jalankan skenario S1+S6 SIL, periksa log SOE & Log SOE skenario S1 \& S6 \\ \hline
+K-W2 & Wajib & SP-01 ($\epsilon < 10\%$) & Hitung $\epsilon$ dari data SOE dan data defisit aktual & Tabel hasil skenario S1 dalam L3 \\ \hline
+K-W3 & Wajib & SP-05 ($V$ 100\%) & Jalankan verifikasi NR AC \textit{post-shedding}, catat jumlah bus melanggar & Laporan Augmentasi-2 dalam L3 \\ \hline
+K-W4 & Wajib & SI-03, SI-04 & Buka \textit{file} SOE CSV, verifikasi kolom dan presisi \textit{timestamp} & \textit{File} SOE.csv tiap skenario \\ \hline
+K-W5 & Wajib & SI-01 & Baca register Modbus dari PLC fisik, catat \textit{latency} & Rekaman Wireshark atau log Modbus \\ \hline
+K-S1 & Diharapkan & SP-04 ($t_{comp}<1$) & 50 \textit{run} berulang, catat \textit{mean} dan \textit{std} $t_{comp}$ & Tabel statistik $t_{comp}$ dalam L3 \\ \hline
+K-S2 & Diharapkan & SP-01-SP-12 & Eksekusi S1-S8, semua metrik masuk tabel L3 & Tabel metrik S1-S8 lengkap \\ \hline
+K-S3 & Diharapkan & SP-09 ($\ge 10\%$ lebih cepat) & Bandingkan $t_{auto}$ (SOE) vs. $t_{manual}$ (SOP) & Tabel perbandingan $t_{auto}$ vs. $t_{manual}$ \\ \hline
+K-S4 & Diharapkan & Semua SP & Laporan teknis L3 diselesaikan dan disetujui mitra & Dokumen L3 ditandatangani mitra \\ \hline
+K-S5 & Diharapkan & SI-07 (GUI $\ge 5\text{ Hz}$) & Rekam \textit{frame rate} GUI dengan \textit{profiler}, catat \textit{fps} & \textit{Screenshot}/rekaman video demo GUI \\ \hline
+K-B1 & Bonus & SP-01, SP-03, SP-05 & Uji skenario S4, semua metrik terpenuhi & Log SOE skenario S4 \\ \hline
+K-B2 & Bonus & Model CLPU & Bandingkan $\alpha_{i}$ prediksi vs. arus aktual PLC & Grafik regresi CLPU dalam L3 \\ \hline
+K-B3 & Bonus & Augmentasi-2 Hasil C & \textit{Trigger} skenario pelanggaran $V$, verifikasi \textit{fallback} aktif & Log Augmentasi-2 dalam SOE \\ \hline
+K-B4 & Bonus & SI-05 & Jalankan skrip di lingkungan bersih, verifikasi hasil & \textit{README} + skrip di repositori \\
+\end{longtable}
+
+\section{Standar Keteknikan yang Diacu}
+\label{sec:Standar_Keteknikan_Diacu}
+
+Seluruh spesifikasi yang ditetapkan mengacu pada standar keteknikan yang diakui secara internasional maupun nasional. Tabel~\ref{tab:standar_keteknikan} merangkum standar-standar tersebut beserta relevansinya terhadap proyek.
+
+\begin{longtable}{|p{3cm}|p{4.5cm}|p{2cm}|p{4.5cm}|}
+\caption{Standar keteknikan yang diacu dalam spesifikasi luaran proyek.}
+\label{tab:standar_keteknikan} \\
+\hline
+\textbf{Kode Standar} & \textbf{Nama Standar} & \textbf{Organisasi} & \textbf{Relevansi dalam Proyek} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{Kode Standar} & \textbf{Nama Standar} & \textbf{Organisasi} & \textbf{Relevansi dalam Proyek} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+IEEE Std 1547-2018 & \textit{Standard for Interconnection and Interoperability of Distributed Energy Resources with Associated Electric Power Systems Interfaces} \cite{IEEE1547_2018} & IEEE & Batas frekuensi operasional (49.5 - 50.5 Hz), frekuensi nadir minimum (SP-07, SP-08), \textit{trigger} proteksi frekuensi rendah \\ \hline
+IEEE Std C37.118.1-2011 & \textit{Standard for Synchrophasor Measurements for Power Systems} & IEEE & Acuan presisi pengukuran tegangan dan frekuensi dari telemetri SCADA (SI-02) \\ \hline
+IEEE Std 1379-2000 & \textit{Recommended Practice for Data Communications Between Remote Terminal Units and Intelligent Electronic Devices in a Substation} & IEEE & Acuan resolusi \textit{timestamp} dan format komunikasi data antara RTU/PLC dan sistem SCADA (SI-03) \\ \hline
+IEC 60038:2009 & \textit{IEC Standard Voltages} \cite{IEC60038_2009} & IEC & Batas tegangan operasional yang diakui internasional: 0.95 - 1.05 p.u. untuk jaringan distribusi (SP-05, SS-02) \\ \hline
+IEC 61850-5:2013 & \textit{Communication Networks and Systems for Power Utility Automation, Part 5: Communication Requirements for Functions and Device Models} \cite{IEC61850_5_2013} & IEC & Persyaratan \textit{timing} dan format log SOE (SI-03, SI-04, SS-04) \\ \hline
+IEC 61158 & \textit{Industrial Communication Networks, Fieldbus Specifications} \cite{IEC61158} & IEC & Standar protokol komunikasi Modbus TCP antara modul OLS dan PLC Schneider Electric (SI-01) \\ \hline
+IEC 62655 Ed.1 & \textit{Guidelines for Design of SCADA HMI} & IEC & Persyaratan ergonomi antarmuka operator SCADA: \textit{refresh rate}, tata letak, dan indikator alarm (SI-07, SS-05) \\ \hline
+IEC 61511 & \textit{Functional Safety, Safety Instrumented Systems for the Process Industry Sector} \cite{IEC61511_2016} & IEC & Prinsip \textit{failsafe} dan SIL (\textit{Safety Integrity Level}) untuk sistem kendali industri (SI-08) \\ \hline
+Permen ESDM No. 3 Tahun 2007 & Aturan Jaringan Sistem Tenaga Listrik Jawa-Madura-Bali \cite{PermenESDM2007} & Kementerian ESDM RI & Batas tegangan operasional jaringan distribusi Indonesia (SP-05, SS-02), \textit{threshold} frekuensi operasi normal (SP-07, SS-03) \\ \hline
+UU No. 30 Tahun 2009 & Undang-Undang Ketenagalistrikan \cite{UU30_2009} & DPR RI & Kerangka hukum keandalan dan keselamatan sistem kelistrikan, dasar perlindungan fasilitas vital (SS-01) \\
+\end{longtable}

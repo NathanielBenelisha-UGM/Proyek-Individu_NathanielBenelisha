@@ -1,0 +1,365 @@
+Proses pemilihan metode terbaik dilakukan berdasarkan hasil evaluasi sistematis terhadap alternatif pendekatan, model permasalahan yang telah disusun, serta kendala-kendala yang teridentifikasi pada tahap awal kajian. Pendekatan ini bertujuan untuk memastikan metode yang dipilih mampu menjawab kebutuhan teknis dan operasional proyek secara menyeluruh. Setelah metode inti ditetapkan, dilakukan pengembangan dan penyesuaian agar penerapannya sesuai dengan konteks proyek, meliputi jaringan sub-transmisi skala laboratorium, integrasi dengan ekosistem perangkat Schneider Electric, serta siklus operasi SCADA secara \textit{real-time}. Selanjutnya, disusun luaran yang diharapkan dari proyek beserta rencana verifikasi untuk memastikan hasil implementasi sesuai dengan tujuan yang ditetapkan.
+
+\section{Rekapitulasi \textit{Trade-off} dan Dasar Pemilihan Metode}
+\label{sec:Rekapitulasi_Trade_off}
+
+Sebelumnya telah diidentifikasi lima pendekatan solusi potensial untuk permasalahan Pelepasan Beban Optimal (P1), Integrasi SCADA (P2), dan Pemulihan Terstruktur (P3). Evaluasi terhadap lima kriteria teknik (K1-K5: optimalitas, kecepatan komputasi, transparansi, penegakan batasan fisik, dan kemudahan implementasi) menghasilkan matriks skor yang diringkas kembali pada Tabel \ref{tab:matriks_rekap_metode}, bersama relevansinya terhadap kendala proyek yang telah ditetapkan.
+
+\begin{longtable}{|p{2.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{3.5cm}|}
+\caption{Matriks rekap evaluasi lima metode terhadap kriteria K1-K5 dan relevansi kendala proyek.}
+\label{tab:matriks_rekap_metode} \\
+\hline
+\textbf{Metode} & \textbf{Optimal (K1)} & \textbf{Cepat (K2)} & \textbf{Transpa-ran (K3)} & \textbf{Batasan (K4)} & \textbf{Imple-mentasi (K5)} & \textbf{Kendala Relevan yang Mendukung / Menggugurkan} \\ \hline
+\endfirsthead
+
+\multicolumn{7}{c}%
+{{}} \\
+\hline
+\textbf{Metode} & \textbf{Optimal (K1)} & \textbf{Cepat (K2)} & \textbf{Transpa-ran (K3)} & \textbf{Batasan (K4)} & \textbf{Imple-mentasi (K5)} & \textbf{Kendala Relevan yang Mendukung / Menggugurkan} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+UFLS Adaptif & Sedang & Sangat Tinggi & Tinggi & Rendah & Sangat Tinggi & Cepat \& sederhana (+), tidak penuhi batasan tegangan \& prioritas beban (-) \\ \hline
+MILP-DC & Sangat Tinggi & Tinggi & Sangat Tinggi & Tinggi & Tinggi & Optimal \& auditabel (+), linieritas DC kurang akurat tegangan reaktif (perlu \textit{post-hoc}) \\ \hline
+MISOCP & Sangat Tinggi & Sedang & Tinggi & Sangat Tinggi & Sedang & Akurasi AC penuh (+), waktu komputasi \& lisensi \textit{solver} lebih mahal (-) \\ \hline
+\textit{Deep RL} & Tinggi & Sangat Tinggi & Sangat Rendah & Rendah & Sangat Rendah & Adaptif (+), \textit{black-box} \& tidak ada \textit{hard constraint}, tidak memenuhi auditabilitas regulasi (-) \\ \hline
+Metaheuristik & Sedang & Rendah & Rendah & Sedang & Sedang & Fleksibel tanpa \textit{solver} (+), stokastik \& tidak ada jaminan optimalitas (-) \\
+\end{longtable}
+
+Dari Tabel \ref{tab:matriks_rekap_metode}, pendekatan MILP-DC menunjukkan penilaian terbaik dan memenuhi paling banyak kendala proyek secara bersamaan. Satu-satunya kelemahan signifikan, yaitu ketidakmampuan memodelkan tegangan reaktif secara eksplisit, namun hal tersebut dapat diatasi melalui mekanisme verifikasi pasca-optimasi (\textit{post-hoc AC power flow check}) tanpa mengorbankan kecepatan komputasi inti. Hal ini menjadi dasar keputusan formal pemilihan MILP-DC.
+
+\section{Keputusan Pemilihan Metode: MILP-DC dengan Augmentasi Bertingkat}
+\label{sec:Keputusan_Pemilihan_Metode}
+
+Metode yang dipilih sebagai inti solusi proyek ini adalah \textit{Mixed-Integer Linear Programming} dengan linearisasi \textit{DC Power Flow} (MILP-DC), yang dikembangkan lebih lanjut menjadi arsitektur MILP-DC Augmentasi Bertingkat (MILP-DC-AB). Augmentasi merujuk pada tiga lapisan tambahan yang membungkus \textit{solver} MILP inti untuk mengatasi keterbatasannya dan mengadaptasinya ke persyaratan operasional proyek secara spesifik. Justifikasi pemilihan didasarkan pada lima argumen teknik berikut.
+
+\begin{enumerate}
+    \item[a.] Jaminan optimalitas terukur: \textit{Solver} MILP modern (HiGHS, \textit{open-source}) menjamin solusi dengan \textit{optimality gap} $<1\%$, yaitu jarak antara solusi yang ditemukan dengan \textit{lower bound} relaksasi LP-nya. Ini memberikan ukuran kualitas solusi yang eksplisit dan dapat dilaporkan kepada operator, sesuatu yang tidak dimiliki DRL maupun metaheuristik \cite{Sarwar2020, Wolsey2021}.
+    \item[b.] Transparansi dan auditabilitas penuh: Setiap variabel keputusan $z_{i}^{*}$ dan $P_{i,shed}^{*}$ memiliki interpretasi fisik langsung: CB mana yang dibuka dan berapa MW beban yang dilepas. Keputusan ini dapat dicatat dalam log SOE, diaudit oleh regulator, dan dijelaskan kepada operator jaringan, persyaratan wajib dalam sistem operasi tenaga listrik yang diregulasi \cite{Babagana2025}.
+    \item[c.] Penegakan \textit{hard constraint} eksplisit: Batasan perlindungan beban kritis ($z_{i}=0,\forall i\in L_c$), kapasitas saluran, dan pemenuhan defisit daya diperlakukan sebagai \textit{hard constraint} yang tidak dapat dilanggar oleh \textit{solver}. Ini menjamin bahwa beban kritis tidak akan pernah diputus oleh algoritma, sebuah jaminan formal yang tidak dapat diberikan oleh DRL \cite{Arenas2026}.
+    \item[d.] Kecepatan komputasi memadai untuk skala proyek: Pada jaringan skala laboratorium ($\le 30$ bus, $\le 21$ variabel biner), \textit{solver} HiGHS menyelesaikan formulasi MILP-DC dalam $< 0.5$ detik pada \textit{engineering workstation} standar. Dengan mekanisme \textit{warm-start} berbasis solusi sebelumnya, waktu ini dapat dipangkas lebih lanjut \cite{Sarwar2020, Sarwar2022}.
+    \item[e.] Ekosistem implementasi matang dan gratis: \textit{Library} Python (Pyomo + HiGHS atau PuLP + HiGHS) bersifat \textit{open-source}, terdokumentasi lengkap, dan mendukung ekspor solusi ke format yang kompatibel dengan antarmuka Modbus TCP untuk komunikasi dengan PLC Schneider Electric \cite{HiGHS}.
+\end{enumerate}
+
+\subsection{Peran Pendukung Metode Lain dalam Arsitektur Terintegrasi}
+\label{subsec:Peran_Pendukung_Metode_Lain}
+
+Meskipun MILP-DC dipilih sebagai inti, dua metode lain berperan sebagai lapisan pelengkap dalam arsitektur terintegrasi:
+
+\begin{enumerate}
+    \item[a.] UFLS Adaptif sebagai \textit{First-Line Defense} (\textit{Hardware Layer}): Skema UFLS berbasis relai yang sudah terpasang pada PLC Schneider Electric dipertahankan sebagai lapisan pertahanan pertama berbasis \textit{hardware}. Relai ini tetap aktif secara paralel dan akan bereaksi dalam $< 100$ ms apabila modul perangkat lunak OLS gagal merespons (\textit{failsafe}). Dengan demikian, keamanan sistem tidak sepenuhnya bergantung pada perangkat lunak.
+    \item[b.] MISOCP sebagai \textit{Fallback} Tahap Dua (Akurasi Tegangan): Apabila verifikasi \textit{post-hoc} \textit{AC power flow} mendeteksi pelanggaran tegangan pada solusi MILP-DC, modul secara otomatis beralih ke \textit{solver} SOCP (via CVXPY + SCS) untuk menghasilkan solusi yang juga mempertimbangkan batasan tegangan reaktif secara eksplisit. Ini merupakan ekstensi opsional yang diaktifkan hanya jika diperlukan, menjaga waktu komputasi nominal tetap rendah.
+\end{enumerate}
+
+\subsection{Perbandingan Fundamental: UFLS Konvensional vs MILP-OLS Usulan}
+\label{subsec:Perbandingan_UFLS}
+
+Dalam menjustifikasi keunggulan sistem yang diusulkan, perlu diperjelas perbedaan fundamental antara skema UFLS eksisting dengan algoritma MILP-OLS. Sistem UFLS eksisting di lapangan beroperasi berdasarkan prinsip pemutusan berurutan yang buta (\textit{blind sequential shedding}). Relai UFLS akan memutus blok beban statis semata-mata berdasarkan pencapaian ambang batas deviasi frekuensi ($\Delta f$), tanpa mengetahui besaran pasti dari defisit daya yang sedang terjadi. Hal ini sering bermuara pada pemutusan beban yang berlebihan (\textit{overshedding}) atau sebaliknya, karena blok yang diputus tidak pernah pas dengan defisit aktual.
+
+Sebaliknya, sistem MILP-OLS yang diusulkan bertindak sebagai \textbf{\textit{Adaptive / Smart UFLS}}. Sistem ini tetap memanfaatkan parameter deviasi frekuensi ($\Delta f$) sebagai pemicu awal kejadian (\textit{trigger}). Namun, alih-alih memutus blok statis, algoritma menggunakan estimasi $\Delta P_{deficit}$ (berdasarkan nilai RoCoF awal gangguan atau telemetri SCADA pra-gangguan) untuk mengukur secara presisi "berapa besar" total daya yang harus dilepas. MILP kemudian bertugas memilih secara cerdas kombinasi beban mana saja yang nilainya menutupi $\Delta P_{deficit}$ tersebut, dengan mengorbankan beban berprioritas paling rendah terlebih dahulu. Pendekatan ini dieksekusi dalam satu langkah penyelesaian matematis (\textit{one-shot optimal shedding}), memberikan perlindungan yang jauh lebih presisi dibandingkan pemotongan diskrit UFLS konvensional.
+
+\section{Pengembangan Metode: Arsitektur MILP-DC Augmentasi Bertingkat (MILP-DC-AB)}
+\label{sec:Pengembangan_Metode_Arsitektur}
+
+Formulasi MILP-DC standar dari literatur memerlukan sejumlah modifikasi dan pengembangan agar dapat beroperasi secara andal dalam konteks proyek ini. Pengembangan ini dibagi menjadi tiga augmentasi yang masing-masing mengatasi keterbatasan spesifik metode standar. Gambar \ref{fig:arsitektur_milp_dc_ab} menunjukkan arsitektur lengkap MILP-DC-AB.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_5_1.png}
+    \caption{Arsitektur MILP-DC Augmentasi Bertingkat (MILP-DC-AB).}
+    \label{fig:arsitektur_milp_dc_ab}
+\end{figure}
+
+\subsection{Augmentasi-1: Estimasi \textit{State Real-Time} dan Deteksi Kontingensi}
+\label{subsec:Augmentasi_1}
+
+Formulasi MILP-DC standar mengasumsikan bahwa nilai $\Delta P_{deficit}$ dan topologi jaringan aktual diketahui secara pasti. Dalam operasi SCADA \textit{real-time}, kedua informasi ini harus diestimasikan dari data telemetri yang mengandung derau (\textit{noise}). Augmentasi-1 mengimplementasikan tiga blok pemrosesan pra-\textit{solver}:
+
+\begin{enumerate}
+\item[a.] \textbf{Filter dan Estimasi RoCoF} \\
+Data frekuensi mentah dari telemetri SCADA difilter menggunakan \textit{Moving Average filter} orde-3 sebelum dihitung turunannya:
+\begin{equation}
+    \hat{f}(t) = \frac{f(t) + f(t-\Delta t) + f(t-2\Delta t)}{3}
+\end{equation}
+\begin{equation}
+    RoCoF(t) = \frac{\hat{f}(t) - \hat{f}(t-\Delta t)}{\Delta t}; \quad (\Delta t = 100 \text{ ms})
+\end{equation}
+\textit{Trigger} OLS diaktifkan apabila salah satu kondisi berikut terpenuhi:
+\begin{equation}
+    RoCoF(t) \le 0.5 \frac{\text{Hz}}{\text{s}} \quad \text{atau} \quad f(t) \le 49.0 \text{ Hz}
+\end{equation}
+\textit{Threshold} dipilih berdasarkan standar operasi PLN dan rekomendasi dari literatur \cite{Parniani2006, PermenESDM2007}. Setelah \textit{trigger} aktif, besar defisit daya diestimasikan menggunakan model \textit{plant} ekivalen:
+\begin{equation}
+    \Delta\hat{P}_{deficit} = -\frac{2H_{eq}\cdot S_{base}}{f_{0}} \cdot RoCoF(t)\big|_{t=\text{trigger}}
+\end{equation}
+Nilai $H_{eq}$ dihitung secara \textit{real-time} berdasarkan status unit pembangkit yang terhubung menggunakan data telemetri status CB pembangkit dari SCADA.
+
+\item[b.] \textbf{Deteksi Kontingensi dan Pembaruan Topologi} \\
+Modul ini membandingkan status CB yang terbaca dengan kondisi nominal untuk mendeteksi saluran atau unit pembangkit yang \textit{trip}. Setiap perubahan topologi memicu pembaruan matriks PTDF menggunakan algoritma Sherman-Morrison untuk pembaruan \textit{rank}-1 yang efisien \cite{Golub2013}:
+\begin{equation}
+    PTDF_{new} = PTDF_{old} - \frac{PTDF_{old} \cdot e_{k} \cdot e_{k}^{T} \cdot PTDF_{old}}{1 + e_{k}^{T} \cdot PTDF_{old} \cdot e_{k}}
+\end{equation}
+dengan $e_{k}$ adalah vektor insidensi saluran k yang \textit{trip}. Operasi ini memiliki kompleksitas $O(|N|^{2})$ dibanding $O(|N|^{3})$ untuk dekomposisi LU penuh, sehingga pembaruan topologi dapat dilakukan dalam $< 10$ ms.
+
+\item[c.] \textbf{Klasifikasi Ulang Beban Dinamis} \\
+Bobot pelepasan $w_{i}$ dapat diperbarui secara dinamis oleh operator melalui antarmuka GUI sebelum eksekusi. Modul membaca tabel konfigurasi prioritas dari \textit{file} JSON yang dapat diedit, sehingga reklasifikasi beban (misalnya meningkatkan prioritas beban tertentu pada kondisi darurat) tidak memerlukan perubahan kode.
+\end{enumerate}
+
+\subsection{Augmentasi-2: Verifikasi \textit{Post-Hoc AC} dan Mekanisme \textit{Fallback} SOCP}
+\label{subsec:Augmentasi_2}
+
+Setelah \textit{solver} MILP-DC menghasilkan solusi $\{z_{i}^{*},P_{i,shed}^{*}\}$ Augmentasi-2 melakukan verifikasi aliran daya AC penuh (Newton-Raphson) pada jaringan pasca-pelepasan untuk memeriksa profil tegangan:
+\begin{equation}
+    \text{Jalankan NR pada } G_{post} = (N, E\setminus\{\text{CB trip}\}, P_{new})
+\end{equation}
+\begin{equation}
+    \text{Cek: } V_{min} \le V_{i,AC} \le V_{max}, \forall i\in N; \quad (0.95 \le V_{i} \le 1.05 \text{ p.u.})
+\end{equation}
+Terdapat tiga kemungkinan hasil verifikasi, masing-masing dengan respons yang berbeda:
+\begin{enumerate}
+    \item[a.] Semua tegangan valid (Hasil A): Solusi MILP-DC diterima langsung. Perintah \textit{trip} CB dikirimkan ke PLC.
+    \item[b.] Pelanggaran tegangan ringan, satu atau dua bus (Hasil B): Tambahkan batasan tegangan linear menggunakan sensitivitas $\partial V_{i}/\partial P_{j}$ dari Jacobian Newton-Raphson sebagai tambahan \textit{constraint} ke MILP, dan jalankan ulang \textit{solver} sekali (satu iterasi korektif):
+\begin{equation}
+    V_{i,0} + \sum_{j=1}^{n} \left(\frac{\partial V_{i}}{\partial P_{j}}\right) \cdot \Delta P_{j}^{shed} \ge V_{min}, \quad \forall i\in N_{violated}
+\end{equation}
+    \item[c.] Pelanggaran tegangan masif, lebih dari dua bus (Hasil C): Aktifkan \textit{fallback} SOCP (\textit{Branch Flow Model} Baran-Wu) yang memodelkan batasan tegangan AC secara eksak pada jaringan radial \cite{Farivar2013}. \textit{Solver} SCS atau CLARABEL via CVXPY digunakan untuk menyelesaikan SOCP dalam $<3$ detik tambahan.
+\end{enumerate}
+Alur logika Augmentasi-2 dirangkum pada Gambar \ref{fig:augmentasi_2}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{gambar_5_2.png}
+    \caption{Flowchart Augmentasi-2: verifikasi \textit{post-hoc} AC dan mekanisme \textit{fallback} SOCP.}
+    \label{fig:augmentasi_2}
+\end{figure}
+
+\subsection{Augmentasi-3: Modul Pemulihan Terstruktur Adaptif}
+\label{subsec:Augmentasi_3}
+
+Augmentasi-3 mengimplementasikan algoritma pemulihan bertahap dengan tiga pengembangan spesifik yang tidak ada dalam literatur standar:
+
+\begin{enumerate}
+\item[a.] \textbf{Estimasi Parameter CLPU dari Data Historis PLC} \\
+Parameter CLPU $\beta_{i}$ dan $\tau_{oi}$ diestimasi menggunakan data arus \textit{pickup} historis yang direkam oleh PLC Schneider Electric. Regresi nonlinear dijalankan pada data pola pemulihan sebelumnya:
+\begin{equation}
+    [\hat{\beta}_{i}, \hat{\tau}_{oi}] = \arg\min \sum_{t} \left[ I_{i}(t) - I_{i0} \cdot \alpha_{i}(t; \beta_{i}, \tau_{oi}) \right]^{2}
+\end{equation}
+Hasil regresi ini diperbarui setiap minggu menggunakan data akumulasi SOE dari SCADA \textit{historian}, sehingga model CLPU semakin akurat seiring waktu operasi.
+
+\item[b.] \textbf{Penjadwalan Pemulihan Berbasis LP Berbobot Adaptif} \\
+Formulasi penjadwalan pemulihan dikembangkan dengan penambahan bobot waktu $\gamma(\tau)$ yang memberikan insentif pemulihan lebih cepat untuk beban semi-kritis:
+\begin{equation}
+    \max \sum_{i\in L_{shed}} \sum_{\tau} w_{i} \cdot \gamma(\tau) \cdot y_{i\tau}
+\end{equation}
+\begin{equation}
+    \gamma(\tau) = e^{-\lambda\cdot\tau} \quad (\lambda=0.1 \text{ per langkah, nilai default})
+\end{equation}
+Faktor diskon eksponensial $\gamma(\tau)$ mendorong pemulihan lebih cepat tanpa melanggar batasan kapasitas cadangan, menghasilkan waktu pemulihan yang lebih pendek dibandingkan penjadwalan tanpa bobot waktu. Parameter $\lambda$ dapat dikonfigurasi oleh operator melalui antarmuka GUI.
+
+\item[c.] \textbf{\textit{Interlocking} dengan Status \textit{Hardware} PLC} \\
+Sebelum mengirimkan perintah \textit{close} CB pada setiap langkah pemulihan, modul membaca ulang status CB dari PLC untuk memverifikasi bahwa tidak ada kondisi \textit{blocking} (misalnya \textit{fault indicator} aktif atau CB dalam mode \textit{local control}). Hanya CB yang statusnya \textit{ready-to-close} dari pembacaan \textit{real-time} PLC yang akan diaktifkan.
+\end{enumerate}
+
+\section{Arsitektur Perangkat Lunak Modul OLS}
+\label{sec:Arsitektur_Perangkat_Lunak}
+
+Modul OLS diimplementasikan sebagai aplikasi Python modular dengan lima komponen utama yang saling berkomunikasi melalui antarmuka yang terdefinisi dengan jelas. Gambar \ref{fig:komponen_software_ols} menunjukkan diagram komponen perangkat lunak.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{gambar_5_3.png}
+    \caption{Diagram komponen perangkat lunak modul OLS.}
+    \label{fig:komponen_software_ols}
+\end{figure}
+
+\subsection{\textit{Stack} Teknologi}
+\label{subsec:Stack_Teknologi}
+
+Pemilihan \textit{stack} teknologi (tumpukan teknologi) perangkat lunak didasarkan pada kebutuhan komputasi analitik berkinerja tinggi, kompatibilitas integrasi dengan perangkat keras industri, serta fleksibilitas pengembangan. Ekosistem Python dipilih sebagai fondasi utama mengingat ketersediaan pustaka (\textit{library}) ilmiah dan optimasi \textit{open-source} yang sangat komprehensif dan matang. Rincian spesifik mengenai setiap komponen perangkat lunak yang membentuk modul OLS, mulai dari \textit{solver} matematis, modul simulasi aliran daya, antarmuka komunikasi Modbus, hingga \textit{Graphical User Interface} (GUI), beserta justifikasi pemilihannya dirangkum secara lengkap pada Tabel \ref{tab:stack_teknologi}.
+
+\begin{longtable}{|p{2.5cm}|p{3.5cm}|p{2cm}|p{6cm}|}
+\caption{\textit{Stack} teknologi modul OLS beserta justifikasi pemilihan.}
+\label{tab:stack_teknologi} \\
+\hline
+\textbf{Komponen} & \textbf{Library/Tool} & \textbf{Versi} & \textbf{Alasan Pemilihan} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{Komponen} & \textbf{\textit{Library/Tool}} & \textbf{Versi} & \textbf{Alasan Pemilihan} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+Bahasa pemrograman & Python & 3.11+ & Ekosistem ilmiah \& optimasi terlengkap, kompatibel dengan semua \textit{library} yang dibutuhkan \\ \hline
+\textit{Solver} MILP & HiGHS via PuLP/Pyomo & HIGHS $>$ 1.5 & \textit{Open-source}, lisensi MIT, performa setara CPLEX untuk masalah $<$ 1000 variabel \cite{HiGHS} \\ \hline
+\textit{Solver} SOCP (\textit{fallback}) & CVXPY + SCS/CLARABEL & CVXPY $>$ 1.4 & \textit{Open-source}, API deklaratif, mendukung SOCP secara \textit{native} \\ \hline
+Aliran daya AC (verifikasi) & pandapower & $\ge 2.13$ & Implementasi NR AC untuk Python, mendukung format IEEE bus \\ \hline
+Komunikasi SCADA-PLC & pymodbus & $\ge 3.x$ & Protokol Modbus TCP standar industri untuk PLC Schneider Electric \\ \hline
+Antarmuka GUI & PyQt6 + pyqtgraph & $PyQt6\ge6.5$ & \textit{Real-time plotting}, \textit{widget} SLD dinamis, cross-platform \\ \hline
+\textit{Logging} \& SOE & pandas + SQLite & - & Penyimpanan \textit{event} terstruktur, ekspor ke CSV/Excel \\ \hline
+Optimasi numerik \& filter & NumPy + SciPy & - & Operasi matriks PTDF, filter \textit{moving average}, regresi CLPU \\
+\end{longtable}
+
+\subsection{Alur Eksekusi Utama (\textit{Main Execution Loop})}
+\label{subsec:Alur_Eksekusi_Utama}
+
+Program utama OLS berjalan dalam \textit{loop} periodik dengan interval 100 ms (sesuai periode \textit{sampling} SCADA). Pseudocode alur eksekusi utama:
+
+LOOP setiap $\Delta t=100$ ms:
+\begin{enumerate}
+    \item Baca telemetri: $[V, I, f, \text{CB\_status}]$ dari PLC via Modbus TCP
+    \item Augmentasi-1:
+    \begin{enumerate}
+        \item[a.] Hitung $f(t)$ via Moving Average (5.1) dan RoCoF (5.2)
+        \item[b.] Cek \textit{trigger} OLS (5.3)
+        \item[c.] IF triggered:
+        \begin{itemize}
+            \item Hitung $\Delta P_{deficit}$ (5.4)
+            \item Update topologi dan PTDF (5.5)
+            \item Load konfigurasi bobot $w_{i}$ dari JSON
+        \end{itemize}
+    \end{enumerate}
+    \item IF OLS triggered:
+    \begin{enumerate}
+        \item[a.] Bangun instance MILP-DC (formulasi BAB 4.4)
+        \item[b.] Jalankan HiGHS \textit{solver} $\rightarrow \{z_{i}^{*}, P_{i}^{shed*}\}$
+        \item[c.] Augmentasi-2: verifikasi NR AC $\rightarrow$ Hasil A/B/C
+        \item[d.] Kirim perintah trip CB ke PLC via Modbus TCP
+        \item[e.] Rekam SOE log dengan \textit{timestamp}
+        \item[f.] Set status = SHEDDING DONE
+    \end{enumerate}
+    \item IF status == SHEDDING DONE:
+    \begin{enumerate}
+        \item[a.] Monitor $f(t)$ dan $V(t)$ untuk kriteria \textit{gating} (4.43)-(4.45)
+        \item[b.] IF kriteria terpenuhi:
+        \begin{itemize}
+            \item Augmentasi-3: jalankan LP pemulihan (5.10)
+            \item Kirim perintah \textit{close} CB bertahap
+            \item Rekam SOE log
+        \end{itemize}
+    \end{enumerate}
+    \item Update tampilan GUI (SLD, grafik frekuensi, tabel SOE)
+\end{enumerate}
+END LOOP
+
+\section{Rencana Simulasi dan Skenario Pengujian}
+\label{sec:Rencana_Simulasi_dan_Skenario_Pengujian}
+
+Verifikasi dan validasi metode MILP-DC-AB dilakukan melalui dua moda pengujian yang saling melengkapi: simulasi perangkat lunak (\textit{Software-in-the-Loop}) dan pengujian \textit{hardware} semi-real (\textit{Hardware-in-the-Loop}).
+
+\subsection{Simulasi \textit{Software-in-the-Loop} (SIL)}
+\label{subsec:Simulasi_SIL}
+
+Simulasi SIL menggunakan pandapower sebagai simulator jaringan tenaga dan modul OLS sebagai pengendali. Skenario gangguan diinjeksikan ke simulator dan respons algoritma dievaluasi. Tabel \ref{tab:skenario_pengujian_sil} merangkum skenario pengujian yang direncanakan.
+
+\begin{longtable}{|p{0.5cm}|p{2.5cm}|p{4.5cm}|p{5.5cm}|}
+\caption{Skenario pengujian SIL yang direncanakan beserta metrik evaluasi.}
+\label{tab:skenario_pengujian_sil} \\
+\hline
+\textbf{No.} & \textbf{Skenario} & \textbf{Deskripsi} & \textbf{Metrik yang Dievaluasi} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{No.} & \textbf{Skenario} & \textbf{Deskripsi} & \textbf{Metrik yang Dievaluasi} \\ \hline
+\endhead
+
+
+\hline
+\endlastfoot
+
+S1 & \textit{Generation Contingency} N-1 & \textit{Trip} satu generator terbesar (37.5\% kapasitas total) & $\epsilon$ (akurasi \textit{shedding}), waktu komputasi, $f_{nadir}$ \\ \hline
+S2 & \textit{Generation Contingency} N-2 & \textit{Trip} dua generator bersamaan (50\% kapasitas) & $\epsilon$, $V$ profil, perlindungan beban kritis \\ \hline
+S3 & \textit{Feeder Contingency} N-1F & \textit{Trip} satu penyulang utama & $V$ profil, akurasi identifikasi CB yang dilepas \\ \hline
+S4 & Gangguan Ganda N-2 (\textit{Gen+Feeder}) & \textit{Trip} generator + penyulang bersamaan & \textit{Robustness} formulasi, waktu komputasi \\ \hline
+S5 & Inersia Rendah (EBT tinggi) & $H_{eq}=2$ (penetrasi EBT 60\%) & RoCoF, kecukupan \textit{window} deteksi 100 ms \\ \hline
+S6 & Skenario Pemulihan Normal & Pasca S1, pemulihan bertahap & Waktu pemulihan vs. manual, urutan prioritas \\ \hline
+S7 & Pemulihan dengan CLPU tinggi & Beban residensial dominan, $t_{off}>10$ menit & Keakuratan estimasi $\alpha$, tidak ada \textit{overload} saat \textit{restore} \\ \hline
+S8 & Verifikasi \textit{Post-hoc} (Augmentasi-2) & Gangguan yang memicu pelanggaran tegangan reaktif & Jumlah iterasi \textit{fallback}, $\Delta$ waktu tambahan vs. akurasi \\
+\end{longtable}
+
+\subsection{Pengujian \textit{Hardware-in-the-Loop} (HIL) dengan PLC Schneider Electric}
+\label{subsec:Pengujian_HIL}
+
+Tahap HIL menggantikan simulator pandapower dengan perangkat keras fisik dari Schneider Electric (PLC, generator simulator, \textit{load simulator}). Gangguan diinjeksikan langsung ke perangkat keras dan modul OLS Python berkomunikasi melalui Modbus TCP nyata. Topologi pengujian HIL diilustrasikan pada Gambar \ref{fig:setup_hil}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{gambar_5_4.png}
+    \caption{Setup pengujian \textit{Hardware-in-the-Loop} di laboratorium.}
+    \label{fig:setup_hil}
+\end{figure}
+
+\section{Luaran Proyek (\textit{Deliverables})}
+\label{sec:Luaran_Proyek}
+
+Mengacu pada kategori luaran yang berlaku, proyek ini menghasilkan dua jenis luaran utama beserta luaran pendukung sebagaimana dijabarkan pada Tabel \ref{tab:luaran_proyek}.
+
+\begin{longtable}{|p{3cm}|p{4.5cm}|p{3.5cm}|p{3.5cm}|}
+\caption{Luaran proyek \textit{capstone} beserta kategori dan kriteria selesai.}
+\label{tab:luaran_proyek} \\
+\hline
+\textbf{Jenis Luaran} & \textbf{Deskripsi Spesifik} & \textbf{Kategori} & \textbf{Kriteria Selesai} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{Jenis Luaran} & \textbf{Deskripsi Spesifik} & \textbf{Kategori} & \textbf{Kriteria Selesai} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+Perangkat Lunak di PC (\textit{Software at PC}) & Aplikasi Python \textit{desktop}: modul OLS dengan \textit{solver} MILP-DC-AB, GUI berbasis PyQt6 menampilkan SLD dinamis, grafik frekuensi \textit{real-time}, dan panel kontrol operator & \textit{Software} di PC & Dapat dijalankan pada \textit{engineering workstation}, berhasil menyelesaikan minimal skenario S1, S3, S6 \\ \hline
+Prototipe Sistem Terintegrasi (SIL+HIL) & Sistem terintegrasi: modul OLS terhubung ke PLC Schneider Electric via Modbus TCP, diuji pada skenario S1-S4 dengan \textit{hardware} fisik & Prototipe/miniatur \textit{hardware/software}/sistem & Berhasil mengirimkan perintah \textit{trip/close} CB ke \textit{hardware} PLC, log SOE dapat diekspor \\ \hline
+Laporan Teknis \& Dokumentasi & Laporan validasi berisi hasil pengujian SIL+HIL, tabel metrik kinerja ($\epsilon$, waktu komputasi, $V$ profil), analisis skenario, dan rekomendasi pengembangan lanjutan & Dokumen (SOP, Laporan Teknis) & Semua metrik terdokumentasi, log SOE terstruktur tersedia \\ \hline
+Skrip Validasi Simulasi (Opsional) & Skrip Python untuk reproduksi seluruh skenario S1-S8 menggunakan pandapower dan \textit{solver} HiGHS, disertai data parameter jaringan 7-bus yang dirancang & \textit{Software} di PC / Kebaruan metode & Skrip dapat dijalankan tanpa modifikasi, hasil reproduksi konsisten dalam toleransi 1\% \\
+\end{longtable}
+
+Luaran utama pertama (Perangkat Lunak di PC) merupakan bukti nyata penerapan solusi algoritma pada platform yang dapat didemonstrasikan. Luaran kedua (Prototipe HIL) mewakili langkah validasi yang lebih dekat ke implementasi industri nyata, sesuai komitmen kemitraan dengan Schneider Electric. Kedua luaran ini bersama-sama memenuhi aspek \textit{tangible solution} dari kriteria IABEE yang telah ditetapkan.
+
+\section{Peta Jalan Pengembangan (\textit{Development Roadmap})}
+\label{sec:Peta_Jalan_Pengembangan}
+
+Pengembangan modul OLS dilaksanakan dalam empat fase iteratif yang masing-masing menghasilkan prototipe yang dapat diuji. Gambar \ref{fig:peta_jalan_pengembangan} menunjukkan peta jalan pengembangan.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_5_5.png}
+    \caption{Peta jalan pengembangan proyek dalam empat fase.}
+    \label{fig:peta_jalan_pengembangan}
+\end{figure}
+
+Setiap fase pada peta jalan di atas dirancang untuk memastikan integrasi sistem berjalan secara bertahap dan terukur. Secara lebih terperinci, matriks kegiatan proyek beserta durasi dan target luaran per fasenya dijabarkan pada Tabel \ref{tab:rincian_fase_pengembangan}.
+
+\begin{longtable}{|p{2cm}|p{2cm}|p{5cm}|p{4.5cm}|}
+\caption{Rincian empat fase pengembangan proyek \textit{capstone}.}
+\label{tab:rincian_fase_pengembangan} \\
+\hline
+\textbf{Fase} & \textbf{Durasi} & \textbf{Aktivitas Utama} & \textbf{Luaran Antara} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{\bfseries Tabel \thetable\ -- Lanjutan dari halaman sebelumnya}} \\
+\hline
+\textbf{Fase} & \textbf{Durasi} & \textbf{Aktivitas Utama} & \textbf{Luaran Antara} \\ \hline
+\endhead
+
+\hline \multicolumn{4}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+Fondasi Matematis \& SIL (Fase 1) & Bulan 1-2 & Implementasi MILP-DC dasar dengan pandapower, validasi skenario S1-S3, analisis akurasi vs. model AC & Skrip MILP-DC tervalidasi, laporan akurasi DC vs. AC, Tabel \ref{tab:akurasi_dc} terisi data eksperimen \\ \hline
+Integrasi SCADA \& GUI (Fase 2) & Bulan 3-4 & Implementasi Augmentasi-1 (estimasi state + deteksi kontingensi), antarmuka Modbus TCP ke PLC, GUI SLD dinamis dan grafik frekuensi, modul SOE \textit{logger} & Aplikasi \textit{desktop} fungsional terhubung ke PLC, SOE log dapat diekspor, demonstrasi dasar ke mitra \\ \hline
+Augmentasi Lengkap \& HIL (Fase 3) & Bulan 5-6 & Implementasi Augmentasi-2 (\textit{post-hoc} AC + SOCP \textit{fallback}) dan Augmentasi-3 (pemulihan adaptif + CLPU), pengujian \textit{hardware} HIL skenario S1-S8 & Sistem MILP-DC-AB lengkap, rekam data skenario S1-S8 HIL, tabel metrik kinerja awal \\ \hline
+Validasi Final \& Dokumentasi (Fase 4) & Bulan 7 & Analisis statistik hasil pengujian, perbandingan dengan \textit{baseline} UFLS, penulisan laporan teknis, persiapan demo final ke Schneider Electric & Laporan teknis final, semua metrik Tabel \ref{tab:metrik_kinerja} terdokumentasi, presentasi demo \\
+\end{longtable}

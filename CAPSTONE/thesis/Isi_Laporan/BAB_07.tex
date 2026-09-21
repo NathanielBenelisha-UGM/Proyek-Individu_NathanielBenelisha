@@ -1,0 +1,146 @@
+Batasan yang digunakan dalam pengembangan sistem \textit{SCADA-Based Optimal Load Shedding and Recovery} ditetapkan untuk membingkai ruang lingkup implementasi secara jelas dan terukur. Penetapan batasan tersebut merupakan keputusan rekayasa yang disengaja agar sistem dapat divalidasi secara jelas pada lingkungan laboratorium dengan mempertimbangkan ketersediaan sumber daya dan waktu pengembangan, sekaligus menyediakan landasan yang jelas untuk pengembangan lebih lanjut. Batasan yang diterapkan mencakup aspek operasional sistem, perangkat lunak, dan perangkat keras.
+
+\section{Batasan Operasional Sistem}
+\label{sec:Batasan_Operasional_Sistem}
+
+Sistem \textit{SCADA-Based Optimal Load Shedding and Recovery} ini beroperasi dalam mode \textit{Hardware-in-the-Loop} (HIL) dengan simulasi fisika komputasional. Artinya, lapisan komunikasi (PLC fisik, Modbus TCP, \textit{relay}) bersifat nyata dan terukur, sementara dinamika frekuensi jaringan dimodelkan secara matematis menggunakan persamaan ayun (\textit{swing equation}) di dalam Python, bukan diukur langsung dari jaringan listrik berenergi. Sistem ini beroperasi dengan mempertimbangkan beberapa batasan operasional sebagai berikut.
+
+\begin{enumerate}
+    \item[a.] \textbf{Model frekuensi berbasis fisika, bukan pengukuran langsung:} Frekuensi sistem $f(t)$ tidak diperoleh dari sensor frekuensi eksternal (PMU atau IED), melainkan dihitung secara komputasional menggunakan integrasi Euler maju dari nilai RoCoF yang diturunkan dari persamaan ayun:
+\begin{equation}
+\begin{aligned}
+    RoCoF &= \frac{f_{0}\cdot\Delta P}{2\cdot H_{eq}\cdot S_{base}} \\
+    f(t+\Delta t) &= f(t)+RoCoF\cdot\Delta t
+\end{aligned}
+\end{equation}
+    Konsekuensi dari batasan ini adalah bahwa akurasi nilai $f(t)$ bergantung sepenuhnya pada akurasi nilai $P_{Gen}$ dan $P_{Load}$ yang dibaca dari PLC, serta ketepatan nilai konstanta inersia ekivalen $H_{eq}$ yang digunakan. Kesalahan pengukuran daya di PLC atau kesalahan konfigurasi $H_{eq}$ akan langsung berdampak pada estimasi frekuensi. Dalam konteks validasi akademis, mode HIL ini merupakan pendekatan yang diterima dan digunakan secara luas dalam penelitian sistem tenaga karena memungkinkan pengujian skenario yang terkontrol dan dapat direproduksi.
+    \item[b.] \textbf{Sistem terbatas pada topologi skala laboratorium tunggal (\textit{Copper-Plate} / 7-Bus):} Topologi jaringan yang dieksekusi secara \textit{real-time} dirancang khusus menyesuaikan kapasitas I/O simulator fisik Schneider Electric (maksimum 12 beban, 4 unit pembangkit). Model saat ini mengadopsi penyederhanaan topologi menjadi satu titik kumpul besar (\textit{single node} / \textit{copper-plate}) yang tidak menghitung rugi-rugi saluran atau parameter jarak transmisi secara spasial. Keputusan ini merupakan \textit{trade-off} arsitektural yang disengaja agar keseluruhan mesin simulasi, komunikasi SCADA Modbus, dan optimasi MILP dapat dieksekusi secara instan dan lancar pada kecepatan 10 \textit{Frame Per Second} (FPS) di \textit{hardware workstation} standar. 
+    
+    Implementasi sistem ini pada \textit{test system} standar IEEE yang lebih besar dan kompleks (seperti IEEE 14-bus atau 33-bus) dengan perhitungan matriks impedansi dan aliran daya penuh akan mengorbankan performa \textit{real-time} 10 FPS tersebut karena komputasi matriks yang sangat berat di Python. Oleh karena itu, pengujian algoritma pada sistem jaringan yang lebih besar ditetapkan secara formal sebagai keterbatasan (\textit{limitation}) lingkup proyek ini dan direkomendasikan sebagai prioritas pengembangan selanjutnya (\textit{future work}).
+    \item[c.] \textbf{Periode \textit{sampling} dan pembaruan telemetri ditetapkan 100 ms:} Seluruh siklus operasi sistem-mulai dari pembacaan $P_{Gen}$ dan $P_{Load}$ dari PLC, perhitungan RoCoF, integrasi frekuensi, pengecekan \textit{trigger}, hingga pengiriman pembaruan ke HMI-berjalan dalam siklus periodik 100 ms. Nilai ini dipilih sebagai keseimbangan antara kecepatan deteksi dan keandalan komunikasi Modbus TCP. Gangguan yang berlangsung lebih cepat dari 100 ms (misalnya lonjakan daya sesaat) tidak dapat terdeteksi oleh sistem ini dan diasumsikan ditangani oleh proteksi \textit{hardware} relai arus lebih yang beroperasi secara independen.
+    \item[d.] \textbf{Mekanisme pemulihan (\textit{recovery}) beroperasi dalam mode semi-otomatis:} Fase pemulihan beban pasca-stabilisasi frekuensi tidak berjalan sepenuhnya otomatis. Sistem akan memberikan rekomendasi urutan pemulihan melalui antarmuka HMI, dan eksekusi \textit{close breaker} dilakukan setelah konfirmasi operator melalui \textit{website}. Hal ini dipilih karena pertimbangan keselamatan: pengaktifan kembali beban secara otomatis tanpa verifikasi manusia dapat berisiko pada lingkungan pengujian fisik. Mode \textit{full}-otomatis dapat diaktifkan melalui konfigurasi parameter, namun bukan merupakan mode operasi \textit{default}.
+    \item[e.] \textbf{Sistem hanya menangani gangguan kontingensi pembangkit (N-1 dan N-2) dan gangguan penyulang tunggal (N-1F):} Skenario gangguan yang diuji dibatasi pada: kehilangan satu unit pembangkit (N-1 \textit{generation contingency}), kehilangan dua unit pembangkit secara simultan (N-2, sebagai ekstensi opsional), dan pemutusan satu saluran distribusi (N-1 \textit{feeder contingency}). Gangguan simultan yang melibatkan lebih dari dua elemen berbeda (misalnya dua saluran dan satu generator \textit{trip} bersamaan) berada di luar lingkup pengujian sistem ini.
+    \item[f.] \textbf{Proteksi tegangan bersifat \textit{post-hoc}, bukan \textit{hard constraint real-time}:} Model \textit{DC Power Flow} yang digunakan dalam \textit{solver} MILP mengasumsikan tegangan bus bernilai 1.0 p.u. (linearisasi DC). Batasan tegangan 0.95 - 1.05 p.u. diperiksa secara terpisah setelah \textit{solver} menghasilkan solusi (Augmentasi-2: verifikasi Newton-Raphson AC \textit{post-hoc}). Pada lingkungan simulator laboratorium yang tidak memiliki reaktansi saluran aktif, verifikasi tegangan ini bersifat komputasional. Pelanggaran tegangan reaktif yang terdeteksi akan mengaktifkan \textit{fallback} SOCP, namun validasi fisiknya terbatas pada kemampuan simulator PLC.
+    \item[g.] \textbf{$H_{eq}$ (konstanta inersia ekivalen) diasumsikan diketahui dan dikonfigurasi secara manual:} Nilai $H_{eq}$ tidak diestimasi secara adaptif dari data pengukuran, melainkan dikonfigurasi di awal sesuai spesifikasi generator simulator yang digunakan. $H_{eq}$ diperbarui secara \textit{real-time} hanya ketika status CB generator berubah (unit \textit{trip} atau kembali \textit{online}), menggunakan formula rata-rata berbobot kapasitas dari unit yang masih terhubung. Ketidakpastian nilai $H_{eq}$ akibat karakteristik simulator yang tidak ideal tidak dimodelkan secara eksplisit.
+    \item[h.] \textbf{Sistem beroperasi pada jaringan lokal (LAN) tanpa koneksi internet:} Seluruh komunikasi antara Python, PLC, dan \textit{browser} HMI berjalan melalui jaringan area lokal (LAN) di lingkungan laboratorium. Aspek keamanan siber (\textit{cybersecurity}) seperti autentikasi akses, enkripsi komunikasi Modbus, atau proteksi terhadap serangan jaringan tidak menjadi fokus proyek ini dan harus ditangani secara terpisah sebelum implementasi pada jaringan produksi.
+\end{enumerate}
+
+\section{Batasan Perangkat Lunak}
+\label{sec:Batasan_Perangkat_Lunak}
+
+Seluruh lapisan perangkat lunak sistem-\textit{SCADA engine}, \textit{solver} optimasi, \textit{physics engine}, dan antarmuka HMI diimplementasikan dalam ekosistem Python dengan tumpukan teknologi \textit{open-source}. Batasan berikut berlaku pada lapisan perangkat lunak.
+
+\subsection{Batasan pada \textit{SCADA Engine} dan Komunikasi}
+\label{subsec:Batasan_SCADA_Engine_dan_Komunikasi}
+
+Lapisan \textit{SCADA Engine} beserta infrastruktur komunikasinya memegang peranan krusial sebagai jembatan pertukaran data waktu-nyata antara algoritma pemrosesan pusat dan perangkat keras PLC di lapangan. Pada implementasi sistem ini, terdapat beberapa batasan teknis terkait spesifikasi protokol jaringan yang hanya mendukung Modbus TCP/IP, sinkronisasi \textit{polling} yang bersifat periodik, metode integrasi numerik untuk mesin fisika, serta ketiadaan manajemen persistensi \textit{state} yang perlu digarisbawahi sebagai parameter dasar operasi arsitektur perangkat lunak.
+
+\begin{enumerate}
+    \item[a.] \textbf{Protokol komunikasi terbatas pada Modbus TCP/IP:} Komunikasi antara modul Python dan PLC menggunakan protokol Modbus TCP melalui \textit{library pymodbus}. Protokol komunikasi industri lain yang lebih canggih (IEC 61850 GOOSE, OPC-UA, DNP3) tidak diimplementasikan dalam proyek ini, meskipun arsitektur modular yang dirancang memungkinkan penggantian protokol di lapisan \textit{interface module} tanpa mengubah logika inti \textit{solver}.
+    
+    \item[b.] \textbf{\textit{Polling} bersifat sinkron (\textit{request-response}), bukan \textit{event-driven}:} Arsitektur pembacaan data menggunakan mekanisme \textit{polling} periodik (Python secara aktif meminta data ke PLC setiap 100 ms), bukan mekanisme \textit{push} berbasis \textit{interrupt} atau \textit{event} dari PLC. Konsekuensinya, jika terjadi perubahan status CB di PLC di antara dua periode \textit{polling} (misalnya pada detik ke-50 ms setelah \textit{polling} terakhir), perubahan tersebut baru terdeteksi pada \textit{polling} berikutnya (hingga 100 ms kemudian). Latensi deteksi maksimum adalah satu periode \textit{polling} $= 100$ ms.
+    
+    \item[c.] \textbf{\textit{Physics engine} menggunakan integrasi Euler maju orde pertama:} Integrasi persamaan diferensial frekuensi menggunakan metode Euler maju (\textit{forward Euler}) dengan langkah waktu tetap $\Delta t=100$ ms. Metode ini bersifat orde pertama dengan \textit{error} per langkah $O(\Delta t^{2})$ dan \textit{error} global $O(\Delta t)$. Untuk skenario gangguan yang berlangsung 10-30 detik dengan $\Delta t=0,1$ s, \textit{error} akumulasi dapat mencapai beberapa persen. Metode Runge-Kutta orde 4 (RK4) atau Heun (orde 2) dapat digunakan sebagai peningkatan akurasi dengan \textit{overhead} komputasi yang minimal, namun tidak diimplementasikan pada versi dasar ini.
+    
+    \item[d.] \textbf{Tidak ada mekanisme persistensi \textit{state} lintas sesi (\textit{session}):} Seluruh \textit{state} sistem (nilai $f(t)$, log SOE, kondisi \textit{breaker}, riwayat telemetri) disimpan dalam memori Python selama program berjalan. Jika program Python dimatikan atau \textit{crash}, seluruh \textit{state} hilang. Data SOE diekspor ke CSV hanya jika operator secara eksplisit menekan tombol ekspor sebelum program ditutup. Implementasi persistensi otomatis ke \textit{database} (SQLite atau PostgreSQL) merupakan pengembangan lanjutan.
+    
+    \item[e.] \textbf{HMI \textit{website} beroperasi hanya pada \textit{browser} lokal, tidak mendukung akses multi-klien bersamaan:} Server Flask/FastAPI dengan Socket.IO dirancang untuk satu koneksi klien aktif (satu \textit{browser}). Koneksi simultan dari beberapa \textit{browser} belum diuji dan dapat menyebabkan kondisi \textit{race} pada pengiriman data WebSocket. Untuk operasi multi-operator, mekanisme sinkronisasi \textit{state} antar klien perlu ditambahkan.
+\end{enumerate}
+
+\subsection{Batasan pada \textit{Solver} MILP}
+\label{subsec:Batasan_pada_Solver_MILP}
+
+Algoritma \textit{Mixed-Integer Linear Programming} (MILP) bertindak sebagai mesin pengambil keputusan analitik utama untuk menentukan skema pelepasan beban yang optimal dalam waktu yang sangat singkat. Guna memenuhi batasan durasi komputasi \textit{real-time} tersebut, perumusan \textit{solver} ini terpaksa mengadopsi sejumlah penyederhanaan matematis dan batasan ruang lingkup, di antaranya ketergantungan pada model linearisasi \textit{DC Power Flow} sebagai ganti aliran daya AC penuh, evaluasi kontingensi yang bersifat berurutan tunggal, hingga penentuan prioritas beban utilitas yang masih harus dikonfigurasi secara statis.
+
+\begin{enumerate}
+    \item[a.] \textbf{Formulasi MILP menggunakan linearisasi \textit{DC Power Flow}:} Model aliran daya yang digunakan dalam formulasi MILP adalah \textit{DC Power Flow} (mengasumsikan $V_{i}\approx 1.0$ p.u. dan sudut fasa kecil), bukan aliran daya AC penuh. Konsekuensinya: aliran daya reaktif tidak dimodelkan secara eksplisit, rugi-rugi saluran resistif (\textit{copper losses}) diabaikan, dan tegangan bus tidak menjadi variabel keputusan dalam MILP utama. Verifikasi tegangan dilakukan secara terpisah (\textit{post-hoc}) menggunakan Newton-Raphson AC via pandapower setelah solusi MILP diperoleh.
+    
+    \item[b.] \textbf{\textit{Solver} hanya menyelesaikan satu skenario kontingensi aktif secara berurutan:} Formulasi MILP yang diimplementasikan menangani satu skenario gangguan pada satu waktu. Ekstensi untuk penanganan kontingensi ganda secara simultan (\textit{robust optimization} terhadap himpunan skenario C) memerlukan penambahan dimensi indeks kontingensi pada formulasi dan peningkatan waktu komputasi sebesar faktor C.
+    
+    \item[c.] \textbf{Model prioritas beban (bobot $w_{i}$) dikonfigurasi secara statis melalui \textit{file} \texttt{app.py}:} Klasifikasi beban ke dalam tiga kategori (kritis, semi-kritis, non-kritis) dan nilai bobot $w_{i}$ yang bersesuaian dibaca dari \textit{file} konfigurasi \texttt{app.py} pada saat inisialisasi. Perubahan prioritas dapat dilakukan oleh operator melalui antarmuka HMI sebelum skenario dijalankan, tetapi tidak dapat diubah secara dinamis saat \textit{solver} MILP sedang berjalan. Sistem belum mendukung pembelajaran bobot adaptif dari data historis.
+    
+    \item[d.] \textbf{Target waktu komputasi \textit{solver} $< 5$ detik valid untuk skala $\le 30$ bus:} Berdasarkan pengujian pada sistem uji 7-bus, \textit{solver} HiGHS via Pyomo menyelesaikan formulasi MILP dalam waktu yang sangat singkat ($< 0.1$ detik). Untuk jaringan yang lebih besar (misalnya standar IEEE 30-bus atau $> 100$ bus), waktu komputasi dapat meningkat secara eksponensial tergantung pada jumlah variabel biner dan tingkat ketidaklinearan masalah. Jaminan waktu $< 5$ detik hanya berlaku untuk jaringan dalam skala yang diuji.
+\end{enumerate}
+
+\subsection{Batasan pada Antarmuka HMI}
+\label{subsec:Batasan_pada_Antarmuka_HMI}
+
+Antarmuka pengguna \textit{Human-Machine Interface} (HMI) dirancang khusus untuk memfasilitasi kewaspadaan situasional (\textit{situational awareness}) serta mengakomodasi kendali visual bagi para operator di ruang kendali (\textit{control room}). Meskipun \textit{dashboard} berbasis web ini sudah mampu melakukan \textit{streaming} data telemetri secara interaktif, fungsionalitas visualisasinya tetap memiliki batasan yang perlu dipahami oleh pengguna, terutama yang berkaitan dengan arsitektur \textit{Single Line Diagram} (SLD) yang bersifat statis (tidak \textit{drag-and-drop}) serta nilai parameter frekuensi pada grafik yang merupakan hasil dari model matematika diferensial, bukan pembacaan perangkat keras sensor secara langsung.
+
+\begin{enumerate}
+    \item[a.] \textbf{Tampilan \textit{Single Line Diagram} (SLD) bersifat statis (topologi tetap):} \textit{Layout} SLD pada \textit{dashboard} HMI menampilkan topologi jaringan yang dikodekan secara tetap (\textit{hardcoded}) sesuai konfigurasi jaringan uji. Perubahan topologi jaringan (penambahan bus, saluran baru) memerlukan modifikasi kode \textit{template} HTML/JavaScript. Fitur editor topologi dinamis belum tersedia.
+    
+    \item[b.] \textbf{Visualisasi frekuensi menampilkan nilai hasil model, bukan pengukuran fisik:} Kurva $f(t)$ yang ditampilkan pada grafik \textit{real-time} HMI adalah hasil integrasi Euler dari \textit{physics engine} Python, bukan hasil pengukuran tegangan AC dari jaringan fisik. Operator harus memahami bahwa nilai frekuensi yang ditampilkan mencerminkan perilaku model matematis sistem, bukan kondisi jaringan listrik aktual di luar simulator.
+\end{enumerate}
+
+\section{Batasan Perangkat Keras}
+\label{sec:Batasan_Perangkat_Keras}
+
+Validasi sistem pada lapisan perangkat keras dilakukan menggunakan ekosistem perangkat Schneider Electric yang disediakan oleh mitra industri. Batasan berikut merupakan karakteristik dan keterbatasan dari perangkat keras yang digunakan.
+
+\subsection{Batasan pada PLC Schneider Electric (Modicon)}
+\label{subsec:Batasan_pada_PLC_Schneider_Electric}
+
+Lapisan perangkat keras pengendali utama dalam pengujian \textit{Hardware-in-the-Loop} (HIL) ini mengandalkan \textit{Programmable Logic Controller} (PLC) Schneider Electric seri Modicon. Dalam arsitektur sistem yang dibangun, fungsionalitas operasional PLC ini dibatasi oleh beberapa karakteristik bawaan perangkat keras, seperti perannya yang dikonfigurasi murni sebagai Modbus \textit{Slave} tanpa komputasi analitik mandiri, kehadiran latensi siklus pemindaian (\textit{scan cycle}) pada eksekusi aktuator fisik, tingkat resolusi modul analog, hingga ketiadaan sensor perangkat keras bawaan untuk mengukur frekuensi arus bolak-balik (AC) secara langsung.
+
+\begin{enumerate}
+    \item[a.] \textbf{PLC berperan sebagai Modbus \textit{Slave} (\textit{server}), bukan sebagai pengendali cerdas:} Dalam arsitektur yang dirancang, PLC Modicon berfungsi sebagai antarmuka I/O dan eksekutor perintah, bukan sebagai pengambil keputusan. Seluruh logika deteksi gangguan, kalkulasi RoCoF, dan optimasi MILP berjalan di Python pada \textit{engineering workstation}. PLC hanya membaca sensor daya dan menyimpannya di register Modbus, dan mengeksekusi perintah buka/tutup \textit{breaker} yang diterima dari Python. Implementasi logika kendali langsung di dalam PLC (\textit{onboard} MILP) berada di luar kapabilitas dan lingkup proyek ini.
+    \item[b.] \textbf{Resolusi dan akurasi pengukuran daya bergantung pada spesifikasi sensor PLC:} Nilai $P_{Gen}$ dan $P_{Load}$ yang dibaca dari PLC memiliki resolusi dan akurasi yang dibatasi oleh karakteristik modul pengukuran yang terpasang. Jika modul pengukuran PLC yang digunakan memiliki resolusi 0.1 MW atau akurasi $\pm 1\%$, maka estimasi $\Delta P$ dan turunannya (RoCoF, $\Delta P_{deficit}$) akan memiliki ketidakpastian yang setara. Kalibrasi sensor sebelum pengujian sangat direkomendasikan.
+    \item[c.] \textbf{Waktu respons eksekusi perintah \textit{breaker} oleh PLC: $\sim 10$ ms:} Dari saat Python mengirimkan perintah \textit{Write Coil} via Modbus TCP hingga PLC benar-benar mengeksekusi perubahan status \textit{output relay}, terdapat latensi eksekusi $\sim 10$ ms yang terdiri dari latensi jaringan Modbus (1 - 5 ms) ditambah waktu siklus \textit{scan} PLC (1 - 10 ms tergantung konfigurasi). Latensi ini tidak dapat dieliminasi dan harus diperhitungkan dalam analisis total waktu respons sistem (dari deteksi \textit{trigger} hingga beban aktual terputus).
+    \item[d.] \textbf{Tidak ada pengukuran frekuensi langsung dari PLC:} PLC Modicon yang digunakan tidak dilengkapi dengan modul pengukuran frekuensi sinyal AC (PMU atau \textit{power meter} IED). Modul I/O analog Modicon mengukur sinyal DC (0 - 10 V atau 4 - 20 mA), bukan tegangan/arus AC jaringan 50 Hz. Oleh karena itu, frekuensi jaringan tidak dapat diukur secara langsung dari \textit{hardware} ini, dan pendekatan \textit{physics engine} berbasis \textit{swing equation} menjadi satu-satunya metode yang feasibel dalam lingkup perangkat keras yang tersedia.
+\end{enumerate}
+
+\subsection{Batasan pada Generator Simulator dan \textit{Load} Simulator}
+\label{subsec:Batasan_pada_Generator_Simulator_dan_Load_Simulator}
+
+Untuk memvalidasi respons kendali algoritma pada lingkungan fisik, sistem ini memanfaatkan simulator generator elektronik dan modul simulator beban berskala laboratorium. Penggunaan instrumen pengujian ini membawa batasan inheren terkait ketiadaan massa putar mekanis yang nyata untuk merepresentasikan inersia alami, pembatasan kapasitas injeksi daya yang menuntut penyesuaian rasio skala dasar ($S_{base}$) secara cermat, serta keterbatasan jumlah modul fisik yang mengakibatkan pengujian skenario kontingensi masif berskala besar tetap harus didelegasikan pada metode \textit{Software-in-the-Loop} (SIL).
+
+\begin{enumerate}
+    \item[a.] \textbf{Generator simulator tidak merepresentasikan inersia mekanis secara fisik:} Simulator generator yang disediakan mitra merupakan sumber daya elektronik yang mensimulasikan \textit{output} daya generator, bukan rotor dengan massa inersia nyata yang berputar. Konstanta inersia $H_{eq}$ yang digunakan dalam \textit{physics engine} dikonfigurasi secara manual berdasarkan nilai referensi, bukan diukur dari respons transien perangkat fisik. Akibatnya, dinamika frekuensi yang dihasilkan adalah hasil model matematis, bukan respons fisik perangkat.
+    \item[b.] \textbf{Kapasitas daya simulator terbatas pada skala laboratorium:} Daya yang dapat dibangkitkan dan dikonsumsi oleh simulator generator dan simulator beban terbatas pada kapasitas perangkat laboratorium (umumnya dalam orde puluhan hingga ratusan watt). Rasio skala antara nilai daya fisik simulator dengan nilai per-unit yang digunakan dalam perhitungan harus dikonfigurasi dengan benar ($S_{base}$ sistem uji). Penggunaan nilai $S_{base}$ yang tidak tepat akan menghasilkan estimasi RoCoF dan keputusan MILP yang tidak proporsional.
+    \item[c.] \textbf{Jumlah beban simulator terbatas, tidak semua skenario S1 - S8 dapat diuji secara penuh pada HIL:} Jumlah simulator beban yang tersedia membatasi jumlah bus beban yang dapat diwakili secara fisik dalam pengujian HIL. Skenario yang memerlukan lebih banyak bus beban daripada yang tersedia secara fisik diselesaikan melalui simulasi \textit{Software-in-the-Loop} (SIL) menggunakan pandapower, bukan HIL penuh.
+\end{enumerate}
+
+\subsection{Batasan pada \textit{Engineering Workstation}}
+\label{subsec:Batasan_pada_Engineering_Workstation}
+
+Pusat komputasi (\textit{Engineering Workstation}) yang menjalankan layanan server SCADA dan melakukan perhitungan algoritma analitik Python bertindak sebagai otak komputasi dari keseluruhan arsitektur. Karena dieksekusi pada perangkat keras dan lingkungan sistem operasi komersial standar yang tidak berpemrograman waktu-nyata murni (\textit{non-real-time OS}), kinerja \textit{workstation} ini dihadapkan pada batasan fluktuasi latensi (\textit{jitter}) operasional pada saat proses \textit{polling}, serta ketiadaan jaminan tenggat waktu (\textit{hard deadline}) mutlak saat mengevaluasi iterasi \textit{solver} MILP, yang mengharuskan penerapan mekanisme perlindungan cadangan berbasis \textit{timeout}.
+
+\begin{enumerate}
+    \item[a.] \textbf{Python berjalan pada sistem operasi \textit{non-real-time} (Windows/Linux \textit{desktop}):} Sistem operasi \textit{desktop} (Windows 10/11 atau Ubuntu 22.04) tidak memiliki jaminan deterministik terhadap waktu eksekusi (\textit{non-real-time} OS). \textit{Scheduling thread} Python dapat terganggu oleh proses latar belakang OS, menyebabkan \textit{jitter} pada periode \textit{polling} yang seharusnya tepat 100 ms. Dalam praktiknya, \textit{jitter} yang teramati pada sistem serupa umumnya berada dalam rentang $\pm 5-20$ ms, yang masih dapat diterima untuk periode \textit{polling} 100 ms namun perlu dikuantifikasi selama pengujian.
+    \item[b.] \textbf{Tidak ada jaminan waktu-nyata keras (\textit{hard real-time}) pada eksekusi MILP:} \textit{Solver} MILP yang berjalan sebagai \textit{thread} asinkron tidak memiliki batas waktu eksekusi yang dijamin secara deterministik. Pada kondisi beban CPU tinggi (misalnya banyak proses berjalan bersamaan), waktu komputasi \textit{solver} dapat melebihi target 500 ms. Mekanisme \textit{timeout} harus diimplementasikan: jika \textit{solver} tidak menyelesaikan dalam 5 detik, sistem kembali ke keputusan berbasis heuristik sederhana (lepas beban dengan prioritas terendah sejumlah $\Delta P$) sebagai \textit{fallback}.
+\end{enumerate}
+
+\section{Ringkasan Batasan dan Implikasi Pengembangan Lanjutan}
+\label{sec:Ringkasan_Batasan_dan_Implikasi}
+
+Tabel~\ref{tab:ringkasan_batasan} merangkum seluruh batasan yang ditetapkan beserta implikasi dan arah pengembangannya, sebagai referensi bagi penelitian lanjutan yang ingin mengembangkan sistem ini menuju implementasi industri nyata.
+
+\begin{longtable}{|p{2cm}|p{3.5cm}|p{3.5cm}|p{4.5cm}|}
+\caption{Ringkasan batasan sistem, implikasi operasional, dan arah pengembangan lanjutan.}
+\label{tab:ringkasan_batasan} \\
+\hline
+\textbf{Kategori} & \textbf{Batasan Saat Ini} & \textbf{Implikasi pada Sistem} & \textbf{Arah Pengembangan Lanjutan} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{Kategori} & \textbf{Batasan Saat Ini} & \textbf{Implikasi pada Sistem} & \textbf{Arah Pengembangan Lanjutan} \\ \hline
+\endhead
+
+\hline
+\endlastfoot
+
+Operasional & $f(t)$ dihitung dari model \textit{swing equation}, bukan diukur & Akurasi frekuensi bergantung penuh pada akurasi $P_{Gen}/P_{Load}$ dari PLC dan konfigurasi $H_{eq}$ & Tambahkan \textit{power meter} IED (PowerLogic PM5320) sebagai sumber pengukuran frekuensi fisik \\ \hline
+Operasional & Jaringan $\le 30$ bus, topologi radial & Tidak dapat langsung diterapkan pada jaringan distribusi PLN skala penuh & Perluasan ke jaringan \textit{mesh} dengan reformulasi PTDF dan skalabilitas \textit{solver} \\ \hline
+Operasional & Periode \textit{sampling} 100 ms & Gangguan $< 100$ ms tidak terdeteksi oleh sistem ini & Tingkatkan ke 20 ms (satu siklus 50 Hz) dengan optimasi \textit{pipeline} Modbus \\ \hline
+Operasional & Mode pemulihan semi-otomatis & Membutuhkan konfirmasi operator untuk setiap langkah pemulihan & Implementasi mode \textit{fully-automatic} dengan \textit{gating conditions} otomatis setelah validasi keamanan \\ \hline
+\textit{Software} & Integrasi Euler maju orde pertama & \textit{Error} akumulasi beberapa persen pada simulasi $>10$ detik & Ganti dengan Runge-Kutta orde 4 (RK4) tanpa perubahan arsitektur \\ \hline
+\textit{Software} & \textit{Polling} Modbus sinkron & Latensi deteksi maksimum $= 1$ periode \textit{polling} $\sim 100$ ms & Implementasi IEC 61850 GOOSE untuk \textit{event-driven notification} $<1$ ms \\ \hline
+\textit{Software} & \textit{DC Power Flow} dalam MILP (tegangan \textit{post-hoc}) & Profil tegangan reaktif tidak dijamin saat \textit{solver} berjalan & Integrasi SOCP (\textit{Branch Flow Model}) sebagai formulasi utama atau \textit{fallback} otomatis \\ \hline
+\textit{Software} & \textit{State} tidak persisten lintas sesi & Data hilang jika program \textit{crash} & Implementasi persistensi otomatis ke SQLite/PostgreSQL dengan \textit{auto-recovery} \\ \hline
+\textit{Hardware} & Tidak ada pengukuran frekuensi dari PLC & Frekuensi murni dari model; tidak ada validasi silang dengan sinyal fisik & Integrasi PowerLogic ION7400 atau modul IED frekuensi ke jaringan PLC \\ \hline
+\textit{Hardware} & Generator simulator tanpa inersia fisik nyata & Konstanta $H_{eq}$ harus dikonfigurasi manual; tidak terukur dari respons fisik & Gunakan generator AC kecil dengan \textit{flywheel} untuk representasi inersia nyata \\ \hline
+\textit{Hardware} & OS \textit{non-real-time} (\textit{jitter} $\sim 5-20$ ms) & Periode \textit{polling} tidak deterministik; MILP tidak memiliki \textit{hard deadline} & Migrasi ke Linux PREEMPT-RT atau Raspberry Pi dengan RT \textit{patch} untuk kontrol periodik \\
+\end{longtable}

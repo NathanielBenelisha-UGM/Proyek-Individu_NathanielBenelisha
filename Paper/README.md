@@ -1,44 +1,56 @@
-# Paper — Frequency-Constrained Unit Commitment with Multi-Source Virtual Inertia
+# 📁 Paper — Draft Publikasi Ilmiah
 
-## Status: DRAFT v0.1 (30 August 2026)
+Folder ini berisi draft paper dalam format **LaTeX (IEEEtran)** untuk publikasi ilmiah.
 
-## Target Journal
-IEEE Access (Q1, IF ~3.9) or Energies (MDPI, Q2)
+---
 
-## File Structure
-- main.tex          — Full LaTeX paper (IEEEtran journal format)
-- 
-eferences.bib    — BibTeX references (to be created)
-- igures/          — Figures directory (to be populated after simulation)
+## File Utama
 
-## How to Compile
-`ash
-pdflatex main.tex
-bibtex main
-pdflatex main.tex
-pdflatex main.tex
-`
-Requires: IEEEtran.cls, amsmath, booktabs, xcolor, graphicx
+| File | Keterangan |
+|------|------------|
+| `main_v2.tex` | ⭐ **Draft terbaru (v2)** — lengkap dengan hasil simulasi 7 skenario, literature review komprehensif, dan 21 referensi dengan DOI tervalidasi |
+| `main.tex` | Draft awal (v1) — template awal sebelum integrasi hasil |
+| `explanation_virtual_inertia.tex` | Penjelasan detail model virtual inertia |
+| `draft_paper.md` | Draft awal dalam format Markdown |
 
-## Placeholder Tags
-All \RESULT{TAG} entries (shown in RED in PDF) must be replaced
-with actual simulation values after running the FCUC model.
+## Draft PDF
 
-## Paper Structure
-1. Introduction (motivation, literature, contributions)
-2. System Modeling (SG, BESS, Solar PV, Wind, SFR model)
-3. FCUC Formulation (objective, UC constraints, BESS, IBR, frequency constraints)
-4. Case Study (IEEE 10-unit + IBR, 7 scenarios)
-5. Results (nadir validation, S0-S6 comparison, economic analysis)
-6. Conclusion
+| File | Keterangan |
+|------|------------|
+| `PI_Draf1.pdf` | Draft PDF versi 1 |
+| `PI_Draf2.pdf` | Draft PDF versi 2 |
+| `PI_Draf3.pdf` | Draft PDF versi 3 |
 
-## Simulation Scenarios
-| ID | Description | IBR% |
-|----|-------------|------|
-| S0 | Classical UC | 0% |
-| S1 | FCUC SG-only | 0% |
-| S2 | FCUC + BESS VI | 40% |
-| S3 | FCUC + BESS+Wind VI | 40% |
-| S4 | **Proposed**: BESS+Wind+Solar VI | 40% |
-| S5 | Proposed at 60% IBR | 60% |
-| S6 | Proposed at 80% IBR | 80% |
+## Subfolder
+
+| Folder | Keterangan |
+|--------|------------|
+| `figures/` | Gambar dan grafik untuk dimasukkan ke paper |
+
+---
+
+## Judul Paper
+
+**"Frequency-Constrained Unit Commitment with Multi-Source Virtual Inertia Provision from Inverter-Based Resources"**
+
+### Penulis
+
+1. Nathaniel Benelisha (corresponding author)
+2. Muhammad Aris Risnandar
+3. Ir. Lesnanto Multa Putranto, S.T., M.Eng., Ph.D., IPM., ASEAN Eng., SMIEEE
+
+### Target Jurnal
+
+IEEE Access / Energies (MDPI)
+
+---
+
+## Cara Kompilasi
+
+```bash
+# Compile LaTeX to PDF
+pdflatex main_v2.tex
+pdflatex main_v2.tex   # Run twice for references
+```
+
+Memerlukan distribusi LaTeX (MiKTeX atau TeX Live) dengan package `IEEEtran`.

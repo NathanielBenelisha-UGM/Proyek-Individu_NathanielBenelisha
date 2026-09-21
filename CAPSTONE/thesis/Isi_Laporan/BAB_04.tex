@@ -1,0 +1,546 @@
+Model matematis lengkap dari sistem yang menjadi objek pengendalian (\textit{plant}) disusun sebagai dasar perumusan formal persoalan optimasi yang harus diselesaikan oleh modul \textit{Optimal Load Shedding} (OLS). Model ini memiliki dua fungsi utama, yaitu sebagai landasan analisis \textit{plant} untuk menentukan arsitektur algoritma, parameter desain, dan kriteria kinerja, serta sebagai model simulasi untuk memverifikasi perilaku sistem sebelum dilakukan pengujian pada perangkat keras. Proses pemodelan dilakukan secara hierarkis, mencakup komponen fisik jaringan, dinamika frekuensi sebagai sinyal kendali utama, model beban terklasifikasi, formulasi optimasi, model pemulihan beban, hingga representasi sistem secara keseluruhan dalam bentuk \textit{state-space} yang ringkas.
+
+\section{Model Jaringan Sub-Transmisi: Graf Berbobot dan Parameter Saluran}
+\label{sec:Model_Jaringan_Distribusi}
+
+Jaringan sub-transmisi bertopologi \textit{mesh} yang menjadi objek studi dimodelkan sebagai graf berarah berbobot $G=(N,E,Z)$, dengan $N=\{1,2,...,n\}$ adalah himpunan bus, $E\subseteq N\times N$ adalah himpunan saluran, dan $Z:E\rightarrow \mathbb{C}$ adalah fungsi yang memetakan setiap saluran ke impedansinya. Bus 1 ditetapkan sebagai bus \textit{slack} (referensi). Himpunan bus beban didefinisikan sebagai $L\subseteq N\setminus\{1\}$ dan himpunan bus pembangkit sebagai $G_{gen}\subseteq N\setminus\{1\}$. Notasi tersebut digunakan secara konsisten dalam seluruh formulasi matematis dan analisis yang dikembangkan.
+
+\subsection{Parameter Saluran Sub-Transmisi}
+\label{subsec:Parameter_Saluran_Distribusi}
+
+Setiap saluran sub-transmisi $(i,j)\in E$ dimodelkan menggunakan model rangkaian $\pi$ sederhana dengan resistansi $r_{ij}$ [$\Omega$] dan reaktansi $x_{ij}$ [$\Omega$]. Untuk jaringan sub-transmisi tegangan tinggi dengan panjang saluran $< 80$ km, admitansi \textit{shunt} kapasitif diabaikan \cite{Glover2017}. Impedansi seri saluran dinyatakan sebagai:
+\begin{equation}
+    z_{ij} = r_{ij} + j\cdot x_{ij} \quad \text{dan} \quad y_{ij} = \frac{1}{z_{ij}} = g_{ij} + j\cdot b_{ij} \text{ [S]}
+\end{equation}
+Rasio resistansi-terhadap-reaktansi (\textit{R/X ratio}) jaringan distribusi dan sub-transmisi umumnya lebih tinggi dibanding jaringan transmisi utama $(R/X \approx 0.1 - 0.3)$, yang menyebabkan kopling kuat antara injeksi daya aktif-reaktif dan profil tegangan. Hal ini menjadi alasan mengapa linearisasi \textit{DC power flow} yang mengabaikan komponen reaktif memiliki keterbatasan akurasi pada jaringan ini, dan harus diverifikasi secara \textit{post-hoc} \cite{Farivar2013}.
+
+\subsection{Matriks Admitansi Bus dan Persamaan \textit{Node}}
+\label{subsec:Matriks_Admitansi_Bus}
+
+Seluruh hubungan elektris jaringan dirangkum dalam matriks admitansi bus $Y_{bus} \in \mathbb{C}^{n\times n}$. Elemen-elemennya direpresentasikan dalam bentuk polar:
+\begin{equation}
+    Y_{ij} = |Y_{ij}|e^{j\theta_{ij}} = G_{ij} + j\cdot B_{ij}
+\end{equation}
+Persamaan \textit{node} sistem dalam domain frekuensi adalah:
+\begin{equation}
+    I = Y_{bus}\cdot V \implies I_{i} = \sum_{j=1}^{n} Y_{ij}V_{j}e^{j\delta_{j}}
+\end{equation}
+dengan $I=[I_{1},...,I_{n}]^{T}$ adalah vektor injeksi arus bus dan $V=[V_{1}e^{j\delta_{1}},...,V_{n}e^{j\delta_{n}}]^{T}$ adalah vektor tegangan bus dalam koordinat polar. Untuk sistem uji yang digunakan dalam proyek ini (jaringan sub-transmisi) yang diilustrasikan pada Gambar \ref{fig:sld_uji}, matriks $Y_{bus}$ berukuran $7\times 7$ dengan nilai admitansi bergantung pada panjang lintasan sirkuit \textit{mesh}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_4_1.png}
+    \caption{\textit{Single Line Diagram} (SLD) sistem uji yang digunakan sebagai \textit{plant} simulasi.}
+    \label{fig:sld_uji}
+\end{figure}
+
+\subsection{Model Aliran Daya AC: Persamaan \textit{Mismatch}}
+\label{subsec:Model_Aliran_Daya_AC}
+
+Keadaan tunak sistem diperoleh dengan menyelesaikan persamaan aliran daya AC penuh. Untuk bus $i\in\{2,...,n\}$, \textit{mismatch} daya aktif dan reaktif didefinisikan:
+\begin{equation}
+    \begin{aligned}
+        \Delta P_{i}(V,\delta) &= P_{i,sch} - \sum_{j}V_{i}V_{j}(G_{ij}\cos\delta_{ij} + B_{ij}\sin\delta_{ij}) = 0 \\
+        \Delta Q_{i}(V,\delta) &= Q_{i,sch} - \sum_{j}V_{i}V_{j}(G_{ij}\sin\delta_{ij} - B_{ij}\cos\delta_{ij}) = 0
+    \end{aligned}
+\end{equation}
+dengan $P_{i,sch}$ dan $Q_{i,sch}$ adalah injeksi daya terjadwal (pembangkitan dikurangi beban) pada bus $i$. Sistem persamaan ini berdimensi $2(n-1)$ dan diselesaikan secara iteratif menggunakan metode Newton-Raphson. Solusinya berupa vektor \textit{state} sistem $x_{0}=[V_{0},\delta_{0}]^{T}$ yang menjadi titik operasi nominal dan titik linearisasi untuk formulasi optimasi.
+
+\subsection{Linearisasi: Model \textit{DC Power Flow}}
+\label{subsec:Linearisasi_Model_DC}
+
+Untuk keperluan formulasi MILP (yang mensyaratkan linearitas), persamaan di atas dilinearisasi di sekitar titik operasi $x_{0}$ menggunakan dua asumsi: $|V_{i}| \approx 1 \text{ p.u.}$ $\forall i$ dan $\sin\delta_{ij} \approx \delta_{ij}$, $\cos\delta_{ij} \approx 1$. Hasilnya adalah model \textit{DC Power Flow}:
+\begin{equation}
+    P_{i} \approx \sum_{j}B_{ij}(\delta_{i}-\delta_{j}) \implies P = B'\cdot\delta
+\end{equation}
+\begin{equation}
+    P_{ij} \approx \frac{\delta_{i}-\delta_{j}}{x_{ij}}
+\end{equation}
+dengan $B'\in\mathbb{R}^{(n-1)\times(n-1)}$ adalah matriks suseptansi reduksi (setelah menghapus baris dan kolom bus \textit{slack}). Dari sini, sudut fasa dapat dinyatakan sebagai:
+\begin{equation}
+    \delta = (B')^{-1}P = X_{bus}P
+\end{equation}
+dengan $X_{bus}=(B')^{-1}$ adalah matriks reaktansi bus. Substitusi ini menghasilkan \textit{Power Transfer Distribution Factor} (PTDF) yang melinearisasi aliran daya saluran terhadap injeksi daya bus:
+\begin{equation}
+    P_{ij} = \sum_{k} PTDF_{ijk} P_{k}
+\end{equation}
+Matriks PTDF dihitung sekali pada kondisi topologi nominal dan diperbarui setiap kali terjadi perubahan topologi (pemutusan saluran). Model DC dengan PTDF ini memungkinkan evaluasi ulang aliran daya seluruh saluran dalam $O(|E|)$ operasi yang jauh lebih efisien dibanding iterasi Newton-Raphson penuh.
+
+Untuk memvalidasi asumsi linearisasi DC pada sistem uji yang digunakan, dilakukan perbandingan antara hasil \textit{DC Power Flow} dan \textit{AC Power Flow} (Newton-Raphson) pada titik operasi nominal. Tabel \ref{tab:akurasi_dc} merangkum hasil validasi referensi batas galat (diadopsi dari \cite{Farivar2013}).
+
+\begin{longtable}{|p{3cm}|p{3.5cm}|p{3.5cm}|p{3cm}|}
+\caption{Akurasi referensi model \textit{DC Power Flow} dibandingkan \textit{AC Power Flow}.}
+\label{tab:akurasi_dc} \\
+\hline
+\textbf{Parameter} & \textbf{Model AC (NR) Referensi} & \textbf{Model DC - Hasil Linearisasi} & \textbf{\textit{Error} Relatif (\%)} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{}} \\
+\hline
+\textbf{Parameter} & \textbf{Model AC (NR) Referensi} & \textbf{Model DC - Hasil Linearisasi} & \textbf{Error Relatif (\%)} \\ \hline
+\endhead
+
+\hline \multicolumn{4}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+Aliran daya aktif $P_{ij}$ & Nilai aktual [MW] & Nilai linearisasi [MW] & $\le 3.2\%$ (rata-rata 1.8\%) \\ \hline
+Sudut fasa $\delta_{i}$ & Nilai aktual [deg] & Nilai linearisasi [deg] & $\le 2.1\%$ \\ \hline
+Tegangan $V_{i}$ & 0.95 - 1.05 p.u. & Dianggap 1.0 p.u. & Tidak dimodelkan (\textit{post-hoc check}) \\ \hline
+Daya reaktif $Q_{ij}$ & Nilai aktual [MVAR] & Diabaikan & - \\
+\end{longtable}
+
+\section{Model Dinamika Frekuensi sebagai \textit{Plant} Kendali}
+\label{sec:Model_Dinamika_Frekuensi}
+
+Frekuensi sistem adalah variabel yang dikendalikan (\textit{controlled variable}) dalam sistem OLS. Bagian ini membangun model lengkap dinamika frekuensi dari tingkat komponen (generator individual) hingga model sistem ekivalen yang digunakan sebagai \textit{plant} dalam perancangan algoritma kendali.
+
+\subsection{Model Generator Sinkron: Persamaan Ayun}
+\label{subsec:Model_Generator_Sinkron}
+
+Setiap unit pembangkit sinkron $k\in G_{gen}$ dimodelkan menggunakan persamaan ayun orde dua (\textit{two-axis model} disederhanakan menjadi orde satu untuk analisis frekuensi) \cite{Kundur1994}:
+\begin{equation}
+    \begin{aligned}
+        \frac{2H_{k}}{\omega_{s}} \cdot \frac{d\omega_{k}}{dt} &= P_{mk} - P_{ek} - D_{k}(\omega_{k}-\omega_{s}) \\
+        \frac{d\delta_{k}}{dt} &= \omega_{k}-\omega_{s}
+    \end{aligned}
+\end{equation}
+dengan $H_{k}$ [s] adalah konstanta inersia unit $k$, $\omega_{s}=2\pi\cdot 50=314.16$ rad/s adalah kecepatan sinkron nominal, $\omega_{k}$ [rad/s] adalah kecepatan rotor aktual, $P_{mk}$ [p.u.] adalah daya mekanis dari turbin; $P_{ek}$ [p.u.] adalah daya elektris yang ditransfer ke jaringan, dan $D_{k}$ [p.u./(p.u. kecepatan)] adalah koefisien redaman (\textit{damping}). Mendefinisikan deviasi kecepatan relatif $\Delta\omega_{k}=\omega_{k}-\omega_{s}$ dan deviasi frekuensi $\Delta f_{k}=f_{k}-f_{0}$, persamaan di atas ditulis ulang:
+\begin{equation}
+    \frac{2H_{k}}{\omega_{s}} \cdot \frac{d\Delta\omega_{k}}{dt} = \Delta P_{mk} - \Delta P_{ek} - D_{k}\cdot\Delta\omega_{k}
+\end{equation}
+Transformasi Laplace memberikan fungsi alih generator dari \textit{input} ketidakseimbangan daya $\Delta P(s)=\Delta P_{m}(s)-\Delta P_{e}(s)$ ke \textit{output} deviasi kecepatan angular:
+\begin{equation}
+    \frac{\Delta\omega(s)}{\Delta P(s)} = \frac{\omega_{s}/2H_{k}}{s + D_{k}\cdot\omega_{s}/2H_{k}} = \frac{K_{k}}{\tau_{k}\cdot s + 1}
+\end{equation}
+dengan $K_{k}=1/D_{k}$ adalah \textit{gain} statis dan $\tau_{k}=2H_{k}/(D_{k}\cdot\omega_{s})$ adalah konstanta waktu inersia efektif. Ini adalah sistem orde pertama dengan satu kutub nyata di $s=-D_{k}\cdot\omega_{s}/(2H_{k})$, yang selalu stabil untuk $D_{k}>0$.
+
+\subsection{Model \textit{Governor} dan Respons Primer}
+\label{subsec:Model_Governor}
+
+\textit{Governor} (regulator kecepatan) merespons deviasi frekuensi dengan mengatur katup turbin untuk mengembalikan keseimbangan daya. Model \textit{governor} sederhana (\textit{reheat governor}) menggunakan fungsi alih:
+\begin{equation}
+    \frac{\Delta P_{m}(s)}{\Delta f(s)} = -\frac{1}{R} \cdot \frac{1+F_{h}\cdot T_{rh}\cdot s}{(1+T_{a}\cdot s)(1+T_{rh}\cdot s)}
+\end{equation}
+dengan $R$ [Hz/p.u.MW] adalah \textit{droop} statis \textit{governor} (nilai tipikal $R=0.04 - 0.05$ untuk sistem 50 Hz), $F_{h}$ adalah fraksi turbin tekanan tinggi (HP), $T_{a}$ [s] adalah konstanta waktu aktuator (tipikal 0.08 - 0.2 s), dan $T_{rh}$ [s] adalah konstanta waktu \textit{reheater} (tipikal 4 - 8 s). \textit{Governor} beroperasi pada rentang frekuensi 49.5 - 50.5 Hz; di luar rentang ini respons primer tidak mencukupi dan pelepasan beban diperlukan \cite{Kundur1994}.
+
+\subsection{Model Sistem Ekivalen Satu Bus (\textit{Single-Bus Equivalent})}
+\label{subsec:Model_Sistem_Ekivalen}
+
+Untuk keperluan desain algoritma deteksi dan respons, sistem multi-generator direpresentasikan sebagai model sistem ekivalen satu-bus dengan inersia ekivalen $H_{eq}$ [s] dan koefisien redaman ekivalen $D_{eq}$:
+\begin{equation}
+    \begin{aligned}
+        H_{eq} &= \sum_{k\in G_{gen}} H_{k} \cdot \frac{S_{k}}{S_{base}} \\
+        D_{eq} &= \sum_{k\in G_{gen}} D_{k} \cdot \frac{S_{k}}{S_{base}}
+    \end{aligned}
+\end{equation}
+dengan $S_{k}$ adalah kapasitas terpasang unit $k$. Persamaan ayun ekivalen sistem:
+\begin{equation}
+    \frac{2H_{eq}}{\omega_{s}} \cdot \frac{d(\Delta\omega)}{dt} = \Delta P_{total} - D_{eq}\cdot\Delta\omega
+\end{equation}
+dengan $\Delta P_{total} = \Delta P_{gen} - \Delta P_{load}$ adalah total ketidakseimbangan daya sistem. Karena $\Delta\omega=2\pi\cdot\Delta f$, persamaan di atas dapat ditulis sebagai fungsi alih dari $\Delta P_{total}(s)$ ke $\Delta f(s)$ ini adalah model \textit{plant} utama dalam proyek ini:
+\begin{equation}
+    \begin{aligned}
+        G_{plant}(s) &= \frac{\Delta f(s)}{\Delta P_{total}(s)} = \frac{f_{0}/(2H_{eq}\cdot S_{base})}{s + \pi\cdot f_{0}\cdot D_{eq}/H_{eq}} \\
+        &= \frac{K_{plant}}{\tau_{plant}\cdot s + 1}
+    \end{aligned}
+\end{equation}
+dengan $K_{plant} = 1/D_{eq}$ [Hz/p.u.MW] adalah \textit{gain} DC \textit{plant} dan $\tau_{plant} = 2H_{eq}/(\pi\cdot f_{0}\cdot D_{eq})$ [s] adalah konstanta waktu \textit{plant}. Kurva respon frekuensi terhadap \textit{step input} ketidakseimbangan daya $\Delta P_{step}$ untuk berbagai nilai $H_{eq}$ ditunjukkan pada Gambar \ref{fig:respon_frekuensi}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_4_2.png}
+    \caption{Respon transien frekuensi $\Delta f(t)$ terhadap step $\Delta P$ untuk berbagai nilai $H_{eq} = \{2, 4, 6, 8\}$ s dengan $D_{eq} = 1$ p.u., $f_{0}=50$ Hz.}
+    \label{fig:respon_frekuensi}
+\end{figure}
+
+\subsection{Analisis Stabilitas \textit{Plant}}
+\label{subsec:Analisis_Stabilitas_Plant}
+
+Dari fungsi alih, kutub \textit{plant} berada di:
+\begin{equation}
+    s_{pole} = -\frac{\pi\cdot f_{0}\cdot D_{eq}}{H_{eq}} < 0 \quad (\text{selalu stabil untuk } D_{eq}>0)
+\end{equation}
+Karena \textit{plant} adalah sistem orde pertama stabil, respon terhadap step defisit daya akan mencapai \textit{steady-state} dengan deviasi frekuensi permanen:
+\begin{equation}
+    \Delta f_{ss} = K_{plant} \Delta P_{ss} = \frac{-\Delta P_{gen}}{D_{eq}\cdot S_{base}} \text{ [Hz]}
+\end{equation}
+Persamaan di atas menyatakan bahwa tanpa intervensi pelepasan beban maupun respons \textit{governor}, kehilangan generator dengan kapasitas $\Delta P_{gen}$ akan menghasilkan deviasi frekuensi permanen sebesar $\Delta P_{gen}/(D_{eq} S_{base})$ Hz. Apabila deviasi ini melebihi $|\Delta f_{max}| = 2.5$ Hz (yaitu frekuensi $< 47.5$ Hz), sistem akan mengalami kolaps total. Ini memvalidasi kebutuhan mekanisme pelepasan beban otomatis. Diagram Bode \textit{plant} untuk $H_{eq}$ = 4 s dan $D_{eq}$ = 1 p.u. ditunjukkan pada Gambar \ref{fig:bode_plant}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_4_3.png}
+    \caption{Diagram Bode $G_{plant}(s)$ untuk $H_{eq} = 4$ s, $D_{eq}=1$ p.u., $f_{0}=50$ Hz, $S_{base} = 100$ MVA.}
+    \label{fig:bode_plant}
+\end{figure}
+
+\subsection{Deteksi Gangguan: Estimasi $\Delta P$ dari RoCoF Terukur}
+\label{subsec:Deteksi_Gangguan}
+
+Modul OLS harus mengestimasi besar defisit daya $\Delta P_{deficit}$ sesaat setelah gangguan menggunakan data telemetri yang tersedia (frekuensi dan RoCoF terukur). Dari turunan persamaan ayun pada $t=0^{+}$ (sebelum \textit{governor} merespons):
+\begin{equation}
+    \Delta P_{deficit} \approx \frac{-2H_{eq}\cdot S_{base}}{f_{0}} \left(\frac{df}{dt}\right)_{t=0^{+}}
+\end{equation}
+Estimasi menggunakan nilai $H_{eq}$ yang dihitung secara \textit{real-time} berdasarkan status unit pembangkit yang terhubung. Implementasi praktis mengestimasi RoCoF menggunakan filter turunan orde pertama:
+\begin{equation}
+    RoCoF(t) \approx \frac{f(t) - f(t-\Delta t)}{\Delta t}
+\end{equation}
+dengan $\Delta t=100$ ms adalah periode \textit{sampling} telemetri SCADA. Untuk meredam derau pengukuran, RoCoF difilter menggunakan \textit{moving average window} $w=3$ sampel.
+
+\section{Model Beban Terklasifikasi}
+\label{sec:Model_Beban_Terklasifikasi}
+
+Model beban yang digunakan dalam proyek ini merupakan kombinasi dari model beban statis (untuk formulasi aliran daya) dan model prioritas beban (untuk fungsi objektif optimasi).
+
+\subsection{Model Beban Statis ZIP}
+\label{subsec:Model_Beban_Statis_ZIP}
+
+Karakteristik beban terhadap tegangan dimodelkan menggunakan model ZIP \cite{Glover2017}:
+\begin{equation}
+    \begin{aligned}
+        P_{i}(V) &= P_{i,0} \left[ a_{Z} \left(\frac{V_{i}}{V_{0}}\right)^{2} + a_{I} \left(\frac{V_{i}}{V_{0}}\right) + a_{P} \right] \\
+        Q_{i}(V) &= Q_{i,0} \left[ b_{Z} \left(\frac{V_{i}}{V_{0}}\right)^{2} + b_{I} \left(\frac{V_{i}}{V_{0}}\right) + b_{P} \right]
+    \end{aligned}
+\end{equation}
+dengan $a_{Z}+a_{I}+a_{P}=1$ dan $b_{Z}+b_{I}+b_{P}=1$, $P_{i,0}$ dan $Q_{i,0}$ adalah daya beban nominal pada tegangan referensi $V_{0}=1$ p.u. Untuk jaringan sub-transmisi dan distribusi umum, nilai tipikal parameter ZIP adalah $a_{Z}=0.3$, $a_{I}=0.3$, $a_{P}=0.4$ \cite{Glover2017}. Dalam formulasi MILP, komponen daya konstan $(a_{P})$ mendominasi, sehingga untuk penyederhanaan model beban direduksi menjadi $P_{i}=P_{i,0}$ (\textit{constant power load}).
+
+\subsection{Klasifikasi dan Pembobotan Beban}
+\label{subsec:Klasifikasi_dan_Pembobotan_Beban}
+
+Setiap bus beban $i\in L$ diklasifikasikan ke dalam tiga kategori berdasarkan tingkat kritikalitasnya terhadap fungsi vital masyarakat. Klasifikasi pada tabel \ref{tab:klasifikasi_beban} menentukan bobot biaya pelepasan $w_{i}$ yang digunakan dalam fungsi objektif optimasi.
+
+\begin{longtable}{|p{2cm}|p{3.5cm}|p{3.5cm}|p{2.5cm}|p{2.5cm}|}
+\caption{Klasifikasi beban dan bobot CENS dalam fungsi objektif OLS.}
+\label{tab:klasifikasi_beban} \\
+\hline
+\textbf{Kategori} & \textbf{Definisi} & \textbf{Contoh} & \textbf{Bobot $w_{i}$} & \textbf{Boleh Dilepas?} \\ \hline
+\endfirsthead
+
+\multicolumn{5}{c}%
+{{}} \\
+\hline
+\textbf{Kategori} & \textbf{Definisi} & \textbf{Contoh} & \textbf{Bobot $w_{i}$} & \textbf{Boleh Dilepas?} \\ \hline
+\endhead
+
+
+\hline
+\endlastfoot
+
+Kritis (C) & Beban yang gangguannya mengancam keselamatan jiwa atau fungsi vital negara & RS, pusat data kritis, lampu merah, pompa air bersih & $w_{i}=M$ ($\gg 1$, \textit{e.g.} $10^{6}$) & Tidak (\textit{hard constraint}) \\ \hline
+Semi-Kritis (SC) & Beban industri atau komersial besar dengan dampak ekonomi signifikan & Pabrik, hotel, pusat perbelanjaan, kampus & $w_{i}=100 - 1000$ & Ya, dengan prioritas akhir \\ \hline
+Non-Kritis (NC) & Beban residensial umum dan beban ringan & Perumahan, toko kecil, lampu jalan & $w_{i}=1 - 10$ & Ya, prioritas pertama \\
+\end{longtable}
+
+Nilai bobot $w_{i}$ secara operasional dapat diinterpretasikan sebagai biaya energi tak tersalurkan per MWh dalam satuan yang ternormalisasi. Referensi empiris CENS untuk berbagai kategori pelanggan di Indonesia menunjukkan rasio biaya kritis:semi-kritis:non-kritis berkisar antara 100:10:1 hingga 1000:100:1 \cite{Saleh2022}.
+
+\subsection{Model Sensitivitas Beban terhadap Frekuensi}
+\label{subsec:Model_Sensitivitas_Beban}
+
+Beberapa kategori beban (terutama beban industri dengan motor listrik) memiliki sensitivitas konsumsi daya terhadap frekuensi yang tidak dapat diabaikan. Model beban dengan respons frekuensi linier \cite{Xiong2006}:
+\begin{equation}
+    P_{i}(f) = P_{i0} \left[ 1 + D_{li} \frac{f - f_{0}}{f_{0}} \right]
+\end{equation}
+dengan $D_{li}$ adalah koefisien sensitivitas frekuensi beban bus $i$ (nilai tipikal $D_{li}\approx 1-2$ untuk beban industri dengan motor dan $\approx 0$ untuk beban pemanas resistif). Total redaman beban jaringan yang berkontribusi pada konstanta redaman ekivalen dihitung sebagai:
+\begin{equation}
+    D_{load} = \sum_{i\in L} D_{li} \frac{P_{i0}}{S_{base}}
+\end{equation}
+Kontribusi redaman beban ini mengurangi besar deviasi frekuensi \textit{steady-state} dan merupakan salah satu faktor yang diabaikan oleh UFLS konvensional, menyebabkan \textit{overshedding}.
+
+\section{Formulasi Formal Persoalan Optimasi OLS}
+\label{sec:Formulasi_Formal_Persoalan_Optimasi}
+
+Berdasarkan model jaringan dan model beban, persoalan Pelepasan Beban Optimal (\textit{Optimal Load Shedding}/OLS) dirumuskan secara formal sebagai program matematika \textit{Mixed-Integer Linear Programming} (MILP). Formulasi ini adalah model desain utama yang akan diimplementasikan sebagai inti dari modul OLS.
+
+\subsection{Himpunan, Parameter, dan Variabel Keputusan}
+\label{subsec:Himpunan_Parameter_Variabel}
+
+\begin{enumerate}
+\item[a.] \textbf{Himpunan:}
+\begin{itemize}
+    \item[i.] $N=\{1,...,n\}$: himpunan bus ($n=7$ untuk sistem uji)
+    \item[ii.] $E\subseteq N\times N$: himpunan saluran sub-transmisi
+    \item[iii.] $L\subseteq N$: himpunan bus beban
+    \item[iv.] $G_{gen}\subseteq N$: himpunan bus pembangkit
+    \item[v.] $L_{c}\subseteq L$: himpunan bus beban kritis (dilarang dilepas, Tabel \ref{tab:klasifikasi_beban})
+    \item[vi.] $C$: himpunan skenario kontingensi yang ditangani
+\end{itemize}
+
+\item[b.] \textbf{Parameter Jaringan:}
+\begin{itemize}
+    \item[i.] $x_{ij}$: reaktansi saluran $(i,j)$ [p.u.]
+    \item[ii.] $S_{ij}^{max}$: kapasitas termal saluran $(i,j)$ [MVA]
+    \item[iii.] $PTDF_{ijk}$: \textit{Power Transfer Distribution Factor} saluran $(i,j)$ terhadap injeksi bus $k$
+    \item[iv.] $V^{min}=0.95$, $V^{max}=1.05$: batas tegangan operasional [p.u.]
+\end{itemize}
+
+\item[c.] \textbf{Parameter Beban dan Gangguan:}
+\begin{itemize}
+    \item[i.] $P_{i}^{max}$: daya aktif total beban bus $i$ [MW]
+    \item[ii.] $w_{i}$: bobot biaya pelepasan beban bus $i$ (Tabel \ref{tab:klasifikasi_beban})
+    \item[iii.] $\Delta P_{deficit}$: defisit daya yang harus ditutup [MW]
+\end{itemize}
+
+\item[d.] \textbf{Variabel Keputusan:}
+\begin{itemize}
+    \item[i.] $z_{i}\in\{0,1\}$: 1 jika beban bus $i$ dilepas, 0 jika dipertahankan ($\forall i\in L$)
+    \item[ii.] $P_{i}^{shed}\ge 0$: besaran daya aktif yang dilepas pada bus $i$ [MW] ($\forall i\in L$)
+    \item[iii.] $\delta_{i}\in\mathbb{R}$: sudut fasa bus $i$ [rad] pasca-pelepasan ($\forall i\in N$)
+    \item[iv.] $V_{i}\in\mathbb{R}$: magnitudo tegangan bus $i$ [p.u.] pasca-pelepasan ($\forall i\in N$)
+\end{itemize}
+\end{enumerate}
+
+\subsection{Fungsi Objektif}
+\label{subsec:Fungsi_Objektif}
+
+Fungsi objektif meminimalkan total biaya energi tak tersalurkan (CENS) tertimbang prioritas beban:
+\begin{equation}
+    \min \sum_{i\in L} w_{i} \cdot P_{i}^{shed}
+\end{equation}
+Fungsi objektif ini secara otomatis mendorong \textit{solver} untuk: tidak melepas beban kritis, melepas beban non-kritis terlebih dahulu, dan melepas jumlah minimal yang cukup untuk menutup $\Delta P_{deficit}$.
+
+\subsection{Batasan-Batasan (\textit{Constraints})}
+\label{subsec:Batasan_Batasan}
+
+\begin{enumerate}
+\item[a.] Pemenuhan Defisit Daya - Ketidakseimbangan Daya Aktif (C1):
+\begin{equation}
+    \sum_{i\in L} P_{i}^{shed} \ge \Delta P_{deficit}
+\end{equation}
+Batasan ini memastikan jumlah beban yang dilepas mencukupi untuk menutup defisit. Tanda $\ge$ (bukan $=$) dipilih untuk menghindari \textit{infeasibility} akibat diskretisasi variabel beban.
+
+\item[b.] Kopling Variabel Biner dengan Besaran Pelepasan (C2):
+\begin{equation}
+    0 \le P_{i}^{shed} \le z_{i} \cdot P_{i}^{max} \quad \forall i\in L
+\end{equation}
+Batasan ini adalah formulasi \textit{Big-M standard} yang menghubungkan variabel biner $z_{i}$ dengan variabel kontinu $P_{i}^{shed}$.
+
+\item[c.] Persamaan Aliran Daya Pasca-Pelepasan (Model DC) (C3):
+\begin{equation}
+    \begin{aligned}
+        \sum_{j:(i,j)\in E} P_{ij} - \sum_{j:(j,i)\in E} P_{ji} &= P_{i}^{gen} - (P_{i}^{\circ}-P_{i}^{shed}) \quad \forall i\in N \\
+        P_{ij} &= \frac{\delta_{i}-\delta_{j}}{x_{ij}} \quad \forall(i,j)\in E
+    \end{aligned}
+\end{equation}
+dengan $P_{i}^{gen}$ adalah daya pembangkitan bus $i$ dan $P_{i}^{\circ}$ adalah daya beban nominal sebelum gangguan.
+
+\item[d.] Kapasitas Termal Saluran (C4):
+\begin{equation}
+    -S_{ij}^{max} \le P_{ij} \le S_{ij}^{max} \quad \forall(i,j)\in E
+\end{equation}
+
+\item[e.] Batas Tegangan (Verifikasi \textit{Post-Hoc} AC) (C5):\\
+Oleh karena model DC tidak memodelkan tegangan secara eksplisit, batasan tegangan tidak dapat ditegakkan sebagai \textit{hard constraint} dalam MILP-DC. Sebagai gantinya, setelah \textit{solver} menghasilkan solusi $z_{i}^{*}$, dilakukan verifikasi aliran daya AC untuk memeriksa apakah profil tegangan yang dihasilkan memenuhi:
+\begin{equation}
+    V^{min} \le V_{i} \le V^{max} \quad (0.95 \le V_{i} \le 1.05 \text{ p.u.}) \quad \forall i\in N
+\end{equation}
+Jika terdapat pelanggaran tegangan pasca-verifikasi, prosedur \textit{fallback} ditambahkan menggunakan sensitivitas $\partial V_{i}/\partial P_{k}$ yang diestimasi dari Jacobian NR, dan ulangi \textit{solver}.
+
+\item[f.] Perlindungan Beban Kritis (C6):
+\begin{equation}
+    z_{i} = 0 \quad \forall i\in L_{c}
+\end{equation}
+
+\item[g.] Integritas Variabel (C7):
+\begin{equation}
+    \begin{aligned}
+        z_{i} &\in \{0,1\} \quad \forall i\in L \\
+        P_{i}^{shed} &\ge 0 \quad \forall i\in L \\
+        \delta_{1} &= 0
+    \end{aligned}
+\end{equation}
+\end{enumerate}
+
+\subsection{Rekap Formulasi Lengkap}
+\label{subsec:Rekap_Formulasi_Lengkap}
+
+Formulasi MILP-OLS secara ringkas disajikan pada model yang disusun dari fungsi objektif dan konstrain (C1)-(C7). Dimensi Masalah untuk sistem uji 7-bus dengan 12 titik beban: variabel biner $|\{z_{i}\}|=12$; variabel kontinu $|\{P_{i}^{shed}\}|=12$, $|\{\delta_{i}\}|=6$, total variabel $=30$. Untuk ukuran ini, komputasi terbilang ringan dan \textit{solver} MILP modern mampu menyelesaikan formulasi dalam waktu $<0.1$ detik.
+
+\subsection{Ekstensi: Penanganan Kontingensi Ganda (N-2)}
+\label{subsec:Ekstensi_Penanganan_Kontingensi_Ganda}
+
+Untuk skenario gangguan ganda, model diperluas dengan mengindeks ulang batasan aliran daya terhadap himpunan kontingensi $c\in C$:
+\begin{equation}
+    \begin{aligned}
+        \sum_{i\in L} P_{i}^{shed} &\ge \Delta P_{c\_deficit} \quad \forall c\in C \\
+        P_{ij\_c} &= \frac{\delta_{i\_c}-\delta_{j\_c}}{x_{ij}} \quad \forall(i,j)\in E_{c}, \forall c\in C
+    \end{aligned}
+\end{equation}
+dengan $E_{c}$ adalah saluran yang \textit{trip} pada kontingensi c dan $\Delta P_{c\_deficit}$ adalah defisit daya spesifik untuk skenario $c$. Formulasi ini menghasilkan solusi pelepasan beban yang \textit{robust}.
+
+\section{Model Pemulihan Pasca-Gangguan}
+\label{sec:Model_Pemulihan_Pasca_Gangguan}
+
+Pemulihan beban pasca-gangguan (\textit{load restoration}) merupakan tahapan penting yang harus dieksekusi setelah sistem tenaga listrik berhasil distabilkan melalui skema pelepasan beban darurat. Proses pemulihan ini bertujuan untuk mengaktifkan kembali beban-beban yang sebelumnya diputus guna meminimalkan durasi pemadaman dan kerugian ekonomi, tanpa memicu ketidakstabilan sekunder pada frekuensi maupun tegangan jaringan. Dalam merancang strategi pemulihan yang aman dan optimal, algoritma harus mempertimbangkan karakteristik transien dari beban saat dihidupkan kembali, terutama lonjakan arus sesaat yang tertunda, serta kriteria kesiapan sistem sebelum daya dikembalikan secara bertahap.
+
+\subsection{Model \textit{Cold Load Pickup} (CLPU)}
+\label{subsec:Model_CLPU}
+
+Fenomena CLPU dimodelkan sebagai fungsi pembesaran beban sesaat terhadap durasi pemadaman $t_{off}$:
+\begin{equation}
+    \alpha_{i}(t_{off}) = 1 + \beta_{i} \left(1 - e^{-t_{off}/\tau_{oi}}\right)
+\end{equation}
+dengan $\beta_{i}$ adalah faktor pembesaran maksimum dan $\tau_{oi}$ adalah konstanta waktu termal agregat beban bus $i$. Daya efektif yang dipikul sistem saat bus $i$ dipulihkan adalah $P_{i}^{start}=\alpha_{i}\cdot P_{i}^{shed}$.
+
+\subsection{Formulasi Penjadwalan Pemulihan}
+\label{subsec:Formulasi_Penjadwalan_Pemulihan}
+
+Pada setiap langkah pemulihan $\tau=1,2,...,T$, optimasi penjadwalan pemulihan dirumuskan sebagai program linier berbobot:
+\begin{equation}
+    \begin{aligned}
+        \max \quad & \sum_{i\in L_{shed}} w_{i}\cdot y_{i\tau} \\
+        \text{s.t.} \quad & \sum_{i\in L_{shed}} \alpha_{i}(t_{off,\tau}) \cdot P_{i}^{shed} \cdot y_{i\tau} \le P_{reserve\tau} - P_{margin} \\
+        & \sum_{\tau'\le\tau} y_{i\tau'} \le 1 \quad \forall i\in L_{shed} \quad \text{(maksimal sekali)} \\
+        & y_{i\tau} \in \{0,1\} \quad \forall i\in L_{shed}, \forall\tau
+    \end{aligned}
+\end{equation}
+dengan $y_{i\tau}=1$ jika beban $i$ dipulihkan pada langkah $\tau$, $P_{reserve\tau}$ adalah kapasitas cadangan pembangkit, dan $P_{margin}=10\%$ dari kapasitas nominal adalah margin keamanan.
+
+\subsection{Kriteria \textit{Gating} Pemulihan}
+\label{subsec:Kriteria_Gating_Pemulihan}
+
+Langkah pemulihan $\tau$ hanya dapat dieksekusi jika seluruh kondisi berikut terpenuhi secara bersamaan:
+\begin{equation}
+    \begin{aligned}
+        f(t) &\in [49,5; 50,5] \text{ Hz selama } \Delta t_{stable} \ge 10 \text{ s} \\
+        |V_{i}-1| &\le 0,05 \text{ p.u.} \quad \forall i\in N \text{ (dari pembacaan SCADA)} \\
+        P_{reserve\tau} &\ge \sum_{i\in R_{\tau}} \alpha_{i} P_{i}^{shed} + P_{margin}
+    \end{aligned}
+\end{equation}
+Jika salah satu kondisi tidak terpenuhi, eksekusi langkah pemulihan ditunda dan sistem menunggu $\Delta t_{check} = 10$ s sebelum memeriksa kembali.
+
+\section{Representasi \textit{State-Space} Sistem Keseluruhan}
+\label{sec:Representasi_State_Space_Sistem}
+
+Untuk menganalisis kestabilan sistem secara komprehensif dan merancang logika kendali Pelepasan Beban Optimal (OLS) sebagai sistem \textit{closed-loop}, seluruh model komponen yang telah dikembangkan diintegrasikan ke dalam satu kerangka matematis yang terpadu. Pendekatan \textit{state-space} dipilih karena mampu merepresentasikan dinamika sistem yang kompleks, termasuk interaksi antara generator, \textit{governor}, dan beban, secara sistematis dalam bentuk matriks linier. Representasi ini menjadi landasan analitis untuk mengevaluasi respons transien sistem terhadap gangguan daya sebagai masukan serta aksi kendali pelepasan beban yang diusulkan.
+
+\subsection{Vektor \textit{State} dan \textit{Output}}
+\label{subsec:Vektor_State_dan_Output}
+
+Mendefinisikan vektor \textit{state} sistem sebagai:
+\begin{equation}
+    x(t) = [\Delta f(t), \Delta\omega(t), \Delta P_{m}(t), \Delta P_{gov}(t)]^{T} \in \mathbb{R}^{4}
+\end{equation}
+dengan $\Delta f=$ deviasi frekuensi [Hz], $\Delta\omega=$ deviasi kecepatan angular [rad/s], $\Delta P_{m}=$ deviasi daya mekanis turbin [p.u.], $\Delta P_{gov}=$ \textit{output governor} [p.u.]. \textit{Input} sistem terdiri dari dua komponen:
+\begin{equation}
+    u(t) = [\Delta P_{dist}(t), \Delta P_{shed}(t)]^{T}
+\end{equation}
+dengan $\Delta P_{dist}=$ gangguan daya dan $\Delta P_{shed}=$ daya yang dilepas oleh modul OLS (variabel kendali). \textit{Output} terukur adalah:
+\begin{equation}
+    y(t) = [\Delta f(t), RoCoF(t)]^{T} = C\cdot x(t)
+\end{equation}
+
+\subsection{Representasi Matriks \textit{State-Space}}
+\label{subsec:Representasi_Matriks_State_Space}
+
+Menggabungkan model generator, \textit{governor}, dan interaksi jaringan, persamaan \textit{state-space} linearisasi sistem lengkap adalah:
+\begin{equation}
+    \begin{aligned}
+        \dot{x} &= A\cdot x + B\cdot u \\
+        y &= C\cdot x + D\cdot u
+    \end{aligned}
+\end{equation}
+dengan matriks sistem (menggunakan parameter tipikal):
+\begin{equation}
+    A = \begin{bmatrix}
+        -D_{eq}\cdot\pi\cdot f_{0}/H_{eq} & \omega_{s}/(2H_{eq}) & \omega_{s}/(2H_{eq}) & 0 \\
+        1 & 0 & 0 & 0 \\
+        0 & -F_{h}/(T_{a}\cdot R) & -1/T_{a} & F_{h}/T_{a} \\
+        0 & (1-F_{h})/(T_{a}\cdot T_{rh}) & 0 & -1/T_{rh}
+    \end{bmatrix}
+\end{equation}
+\begin{equation}
+    B = \begin{bmatrix}
+        -\pi\cdot f_{0}/H_{eq} & \pi\cdot f_{0}/H_{eq} \\
+        0 & 0 \\
+        0 & 0 \\
+        0 & 0
+    \end{bmatrix}, \quad
+    C = \begin{bmatrix}
+        1 & 0 & 0 & 0 \\
+        -D_{eq}\cdot\pi\cdot f_{0}/H_{eq} & \omega_{s}/(2H_{eq}) & \omega_{s}/(2H_{eq}) & 0
+    \end{bmatrix}
+\end{equation}
+\begin{equation}
+    D = 0 \quad \text{(tidak ada \textit{direct feedthrough})}
+\end{equation}
+
+\subsection{Analisis Nilai Eigen dan Kestabilan \textit{Loop} Terbuka}
+\label{subsec:Analisis_Nilai_Eigen}
+
+Nilai eigen matriks $A$ menentukan stabilitas sistem \textit{loop} terbuka:
+\begin{equation}
+    \det(sI-A) = 0 \implies \lambda_{1} \approx -39.3, \quad \lambda_{2} \approx -12.6, \quad \lambda_{3} \approx -0.23 \pm j\cdot 0.41
+\end{equation}
+Semua nilai eigen memiliki bagian nyata negatif $(Re(\lambda_{i})<0)$, sehingga sistem \textit{loop} terbuka bersifat stabil dalam kondisi normal. Namun, ketika gangguan daya $\Delta P_{dist}$ sangat besar, deviasi \textit{steady-state} akan melampaui batas kritis 47.5 Hz. Ini memvalidasi peran modul OLS sebagai pengendali tambahan.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_4_4.png}
+    \caption{\textit{Root locus} sistem dinamika frekuensi dan (\textit{pole-zero map}) $G_{plant}(s)$ dengan parameter tipikal $H_{eq} = 4$ s, $D_{eq}=1$ p.u., $f_{0}=50$ Hz.}
+    \label{fig:root_locus}
+\end{figure}
+
+\subsection{Desain Logika Kendali OLS sebagai \textit{Loop} Tertutup}
+\label{subsec:Desain_Logika_Kendali}
+
+Aksi pelepasan beban $\Delta P_{shed}$ oleh modul OLS dapat dimodelkan sebagai kendali \textit{feedforward} berbasis estimasi gangguan:
+\begin{equation}
+    \Delta P_{shed}^{*}(t) = K_{ff} \Delta P_{deficit}(t) + K_{fb}(f(t) - f_{ref})
+\end{equation}
+
+Model \textit{state-space} kontinu pada persamaan sebelumnya menjadi landasan teoretis untuk membangun \textit{Physics Engine} (modul simulasi). Di dalam program, dinamika ini dieksekusi secara \textit{real-time} menggunakan metode integrasi numerik Euler, yang berfungsi merepresentasikan \textit{plant} sistem tenaga listrik yang dinamis. 
+
+Berbeda dengan pengendali kontinu konvensional (seperti LQR atau PID) yang memberikan masukan kendali secara terus-menerus, algoritma optimasi MILP dalam penelitian ini dirancang sebagai \textbf{\textit{Supervisory Discrete-Event Controller}}. Modul MILP berada di luar \textit{loop} orde-mikro dan hanya akan aktif (di-\textit{trigger}) sebagai langkah intervensi ketika variabel \textit{state} frekuensi ($\Delta f$) jatuh melewati ambang batas kritis (misalnya $\le 49.50$ Hz). Saat terpicu, MILP menghitung kombinasi beban optimal untuk menghasilkan masukan kendali $\Delta P_{shed}$ yang seketika dikembalikan ke dalam \textit{plant} untuk menstabilkan \textit{state} kembali ke titik ekuilibrium (50 Hz).
+
+Tantangan utama dalam implementasi kendali ini adalah kebutuhan variabel $\Delta P_{deficit}$ untuk menghitung seberapa besar beban yang harus dilepas. Di sistem kelistrikan riil, mengukur perubahan aliran daya aktif ($\Delta P$) secara langsung dan presisi pada detik-detik awal gangguan \textit{transient} sangatlah sulit dilakukan.
+
+Oleh karena itu, sebagai rasionalisasi teknis, algoritma ini tidak mengukur $\Delta P$ secara fisis. Nilai defisit daya diestimasi secara instan menggunakan deviasi frekuensi ($\Delta f$), khususnya melalui parameter \textit{Rate of Change of Frequency} (RoCoF) pada saat gangguan terjadi ($t=0^{+}$). Dengan membalik \textit{Swing Equation}, sistem kendali dapat menaksir daya yang hilang melalui pembacaan turunan frekuensi:
+\begin{equation}
+    \Delta P_{deficit} \approx \frac{2 H_{eq}}{f_{0}} \times \left( \frac{df}{dt} \right)_{t=0^{+}}
+\end{equation}
+Pendekatan estimasi berbasis frekuensi ini memastikan bahwa sistem kendali yang diusulkan sangat \textit{feasible} untuk diterapkan pada \textit{grid} modern, mengingat sensor frekuensi (PMU) jauh lebih responsif dibanding pengukuran \textit{power flow} seketika. Dalam arsitektur \textit{Cyber-Physical System} (SCADA), $\Delta P_{deficit}$ juga dapat diverifikasi secara silang (\textit{cross-validation}) dengan telemetri \textit{pre-contingency} dari status operasi generator.
+
+\section{Validasi Model dan Spesifikasi Parameter Sistem Uji}
+\label{sec:Validasi_Model}
+
+Seluruh model matematis yang telah dibangun akan divalidasi secara bertahap sebelum digunakan dalam perancangan modul OLS. Tabel \ref{tab:parameter_sistem_uji} merangkum parameter sistem uji yang akan digunakan.
+
+\begin{longtable}{|p{4cm}|p{4.5cm}|p{4cm}|}
+\caption{Parameter sistem uji dan nilai acuan untuk simulasi dan eksperimen.}
+\label{tab:parameter_sistem_uji} \\
+\hline
+\textbf{Parameter} & \textbf{Nilai / Spesifikasi} & \textbf{Sumber/Referensi} \\ \hline
+\endfirsthead
+
+\multicolumn{3}{c}%
+{{}} \\
+\hline
+\textbf{Parameter} & \textbf{Nilai / Spesifikasi} & \textbf{Sumber/Referensi} \\ \hline
+\endhead
+
+
+\hline
+\endlastfoot
+
+Topologi sistem uji & Jaringan sub-transmisi mesh (7 Bus, 4 Gen, 12 Beban) & Ditentukan sesuai skenario proyek \\ \hline
+Jumlah titik beban $L$ & 12 titik (3 kritis, 3 esensial, 6 non-esensial) & Ditentukan sesuai skenario proyek \\ \hline
+Kapasitas sistem ($S_{base}$) & 100 MVA & Standard p.u. system \\ \hline
+Frekuensi nominal ($f_{0}$) & 50 Hz & Standar PLN/Permen ESDM \cite{PermenESDM2007} \\ \hline
+Konstanta inersia ($H_{eq}$) & 2 - 6 s (bervariasi sesuai skenario penetrasi EBT) & Berdasarkan \cite{Kundur1994, Drhorhi2024} \\ \hline
+Koefisien redaman ($D_{eq}$) & 1.0 - 2.0 p.u. & Nilai tipikal \cite{Kundur1994} \\ \hline
+Batas tegangan & 0.95 - 1.05 p.u. & Permen ESDM No. 3/2007 \cite{PermenESDM2007} \\ \hline
+Batas RoCoF (\textit{trigger} OLS) & $\ge 0.5$ Hz/s atau $f \le 49.0$ Hz & Berdasarkan \cite{Drhorhi2024, Parniani2006} \\ \hline
+\textit{Solver} MILP & HiGHS (\textit{open-source}) via Python PuLP/Pyomo & HiGHS v1.x \cite{HiGHS} \\ \hline
+Periode \textit{sampling} SCADA & 100 ms (telemetri frekuensi) & Konfigurasi PLC Schneider Electric \\ \hline
+Target waktu komputasi & $<5$ s (aspirasional $< 1$ s untuk $|N|\le 7$) & Ditetapkan berdasarkan analisis \cite{Xiong2006} \\ \hline
+Margin cadangan pemulihan & 10\% dari kapasitas nominal & Praktik operasi standar \\
+\end{longtable}
+
+Validasi model akan dilakukan dalam dua tahap:
+\begin{enumerate}
+    \item \textbf{Validasi Analitik}: Membandingkan respons \textit{step} $\Delta f(t)$ dari model \textit{state-space} dengan simulasi menggunakan \textit{tool} standar (Python/scipy atau MATLAB/Simulink) untuk memverifikasi kebenaran derivasi.
+    \item \textbf{Validasi Simulasi Jaringan}: Membandingkan hasil aliran daya DC dengan hasil Newton-Raphson AC pada jaringan uji untuk mengkonfirmasi batasan akurasi linearisasi (Tabel \ref{tab:akurasi_dc}) masih dapat diterima pada skenario gangguan yang direncanakan.
+\end{enumerate}

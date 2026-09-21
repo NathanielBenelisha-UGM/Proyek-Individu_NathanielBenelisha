@@ -1,0 +1,282 @@
+Sebelum melakukan analisis pustaka, perlu dirumuskan kembali secara ringkas permasalahan inti yang menjadi objek penyelesaian dalam proyek \textit{capstone} ini. Pemahaman yang tepat terhadap permasalahan menjadi dasar dalam menentukan relevansi dan kedalaman analisis terhadap setiap literatur yang dikaji.
+
+\section{Rekapitulasi Permasalahan yang Ingin Diselesaikan}
+\label{sec:Rekapitulasi_Permasalahan}
+
+Sistem tenaga listrik sub-transmisi modern menghadapi ancaman ketidakstabilan yang semakin besar seiring meningkatnya penetrasi pembangkit energi terbarukan berbasis inverter yang mereduksi inersia sistem. Ketika terjadi gangguan, baik berupa lepasnya unit pembangkit (\textit{generation contingency}) maupun putusnya saluran (\textit{feeder contingency}), frekuensi dan tegangan sistem dapat anjlok dengan laju yang sangat cepat. Mekanisme pertahanan konvensional (UFLS berbasis relai statis) terbukti tidak mampu merespons secara optimal karena bekerja berdasarkan ambang batas tetap tanpa mempertimbangkan kondisi global jaringan, sehingga mengakibatkan \textit{overshedding} atau \textit{undershedding} yang keduanya merugikan.
+
+Dari analisis tersebut, tiga permasalahan teknis utama yang harus diselesaikan secara simultan diidentifikasi sebagai berikut.
+
+\begin{enumerate}
+    \item[a.] Pelepasan Beban Optimal \textit{Real-Time} (P1): Menentukan subset beban minimum yang harus dilepas sesaat setelah gangguan terdeteksi, sedemikian sehingga defisit daya tertutup secara mencukupi, profil tegangan seluruh bus tetap dalam rentang aman (0.95 - 1.05 p.u.), kapasitas termal saluran tidak dilampaui, beban kritis terlindungi, biaya total energi tak tersalurkan (CENS) terminimasi, semuanya diselesaikan dalam batasan waktu operasional SCADA.
+    \item[b.] Integrasi dengan Arsitektur SCADA (P2): Solusi algoritma harus dapat diintegrasikan ke dalam ekosistem SCADA/PLC mitra industri (Schneider Electric), mengonsumsi data telemetri \textit{real-time}, dan mengeksekusi perintah kendali \textit{circuit breaker} secara otomatis tanpa intervensi operator pada fase pelepasan darurat.
+    \item[c.] Pemulihan Terstruktur Pasca-Gangguan (P3): Menentukan urutan pengaktifan kembali beban yang aman pasca-stabilisasi sistem, memperhitungkan fenomena CLPU, ketersediaan cadangan pembangkitan, dan prioritas beban, secara otomatis tanpa bergantung pada keputusan operator manual yang lambat.
+\end{enumerate}
+
+Ketiga permasalahan ini secara bersama-sama membentuk ruang solusi yang terbuka (\textit{open-ended}), karena terdapat beragam pendekatan teknologi di literatur yang masing-masing menawarkan \textit{trade-off} berbeda antara optimalitas, kecepatan komputasi, transparansi, dan kemudahan implementasi. 
+
+\section{Kerangka Evaluasi Solusi Potensial}
+\label{sec:Kerangka_Evaluasi_Solusi_Potensial}
+
+Evaluasi terhadap setiap pendekatan solusi dilakukan berdasarkan lima kriteria keteknikan yang relevan dengan konteks proyek ini. Kelima kriteria ini dipilih karena secara langsung menentukan kelayakan implementasi modul OLS dalam lingkungan SCADA industri. 
+
+\begin{longtable}{|p{3.5cm}|p{5.5cm}|p{6cm}|}
+\caption{Kriteria Evaluasi Solusi Potensial OLS}
+\label{tab:kriteria_evaluasi} \\
+\hline
+\textbf{Kriteria Evaluasi} & \textbf{Deskripsi} & \textbf{Relevansi terhadap Proyek} \\ \hline
+\endfirsthead
+
+\multicolumn{3}{c}%
+{{}} \\
+\hline
+\textbf{Kriteria Evaluasi} & \textbf{Deskripsi} & \textbf{Relevansi terhadap Proyek} \\ \hline
+\endhead
+
+\hline \multicolumn{3}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+Optimalitas Solusi (K1) & Seberapa dekat solusi yang diperoleh dengan solusi optimal global; diukur dengan \textit{optimality gap} (\%) & Menentukan akurasi pelepasan beban: $\epsilon = |P_{shed} - \Delta P| / \Delta P < 10\%$ \\ \hline
+Kecepatan Komputasi (K2) & Waktu dari deteksi gangguan hingga keputusan eksekusi CB tersedia & Harus $< 5$ detik untuk konteks SCADA sub-transmisi, aspirasional $< 1$ detik \\ \hline
+Transparansi \& Auditabilitas (K3) & Kemampuan solusi untuk dijelaskan, diverifikasi, dan diaudit oleh operator & Wajib untuk lingkungan operasi kritis, regulasi mensyaratkan SOE yang dapat diaudit \\ \hline
+Kemampuan Menangani Batasan Fisik (K4) & Kemampuan metode untuk secara eksplisit menegakkan batasan tegangan, kapasitas saluran, dan prioritas beban & Batasan-batasan wajib dipenuhi secara \textit{hard constraint} \\ \hline
+Kemudahan Implementasi \& Integrasi (K5) & Kompleksitas integrasi dengan SCADA/PLC eksisting, ketersediaan \textit{library}, dan \textit{overhead} komputasi & Sistem harus dapat dijalankan pada \textit{engineering workstation} standar dan kompatibel dengan ekosistem Schneider Electric \\
+\end{longtable}
+
+Setiap solusi potensial yang diidentifikasi dari literatur akan dievaluasi terhadap kelima kriteria K1-K5 pada tabel \ref{tab:kriteria_evaluasi}, disertai dengan identifikasi keunggulan dan kelemahan spesifik berdasarkan bukti empiris dari referensi yang dikaji.
+
+\section{Identifikasi Solusi Potensial dari Literatur}
+\label{sec:Identifikasi_Solusi_Potensial_dari_Literatur}
+
+Dari kajian komprehensif terhadap literatur yang ada, setidaknya lima pendekatan solusi potensial telah diidentifikasi untuk menangani permasalahan P1-P3. Keberagaman pendekatan ini menegaskan sifat \textit{open-ended} dari permasalahan yang dipilih. Gambar \ref{fig:tradeoff_solusi} memetakan posisi setiap pendekatan dalam ruang \textit{trade-off} antara optimalitas solusi dan kecepatan komputasi.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_3_1.png}
+    \caption{Peta \textit{trade-off} solusi potensial OLS: optimalitas vs. kecepatan komputasi.}
+    \label{fig:tradeoff_solusi}
+\end{figure}
+
+\subsection{Solusi 1: UFLS Adaptif Berbasis Sinyal Frekuensi Lokal}
+\label{subsec:Solusi_1}
+
+Pendekatan pertama merupakan evolusi dari skema UFLS konvensional. Alih-alih menggunakan ambang batas tetap, skema UFLS adaptif menyesuaikan jumlah dan lokasi beban yang dilepas berdasarkan besaran sinyal frekuensi terukur secara lokal, termasuk nilai RoCoF dan deviasi frekuensi yang terdeteksi saat gangguan terjadi.
+
+\begin{enumerate}
+\item[a.] \textbf{Kajian Literatur Solusi 1} \\
+Xiong dan Li \cite{Xiong2006} mengusulkan skema UFLS yang mempertimbangkan karakteristik respon frekuensi beban (\textit{load frequency characteristics}), yaitu sensitivitas konsumsi daya beban terhadap perubahan frekuensi. Skema ini menghitung jumlah beban yang perlu dilepas berdasarkan estimasi defisit daya menggunakan model sistem orde pertama, sehingga lebih akurat dibanding UFLS statis namun tetap dapat dieksekusi oleh relai lokal tanpa memerlukan komunikasi jaringan. Pengujian dilakukan pada sistem tes IEEE 14-bus.
+
+Zhu \textit{et al.} \cite{Zhu2021} mengembangkan skema UFLS adaptif yang menginkorporasi pengaruh respons beban (\textit{load response}), yaitu respons elastisitas beban terhadap deviasi frekuensi, ke dalam perhitungan jumlah pelepasan. Studi ini menggunakan model sistem dengan representasi beban dinamis yang lebih realistis dan menunjukkan bahwa mengabaikan \textit{load response} dapat menyebabkan \textit{overshedding} signifikan hingga 15-25\% pada sistem dengan beban berkarakter frekuensi-sensitif \cite{Zhu2021}.
+
+Parniani dan Nasri \cite{Parniani2006} secara khusus mengintegrasikan pengukuran RoCoF berbasis SCADA ke dalam logika UFLS, membuktikan bahwa informasi RoCoF yang dikomunikasikan melalui infrastruktur SCADA eksisting dapat meningkatkan akurasi estimasi defisit daya tanpa memerlukan optimasi matematis.
+
+Jinhua dan Yanyan \cite{Jinhua2022} mengusulkan UFLS adaptif berbasis \textit{Artificial Neural Network} (ANN) untuk memprediksi besaran pelepasan beban yang optimal berdasarkan kondisi pra-gangguan. Model ANN dilatih menggunakan data historis simulasi dan mampu menghasilkan keputusan dalam $< 50$ ms pada fase inferensi, jauh lebih cepat dibandingkan \textit{solver} optimasi.
+
+\item[b.] \textbf{Evaluasi terhadap Kriteria K1-K5 Solusi 1}
+\begin{itemize}
+    \item[i.] \textbf{Optimalitas (K1):} Sedang. UFLS adaptif berbasis lokal menggunakan model sistem yang disederhanakan (orde pertama atau linear) sehingga tidak dapat menjamin solusi optimal global. Estimasi defisit daya menggunakan RoCoF lokal rentan terhadap kesalahan karena RoCoF di satu bus tidak selalu merepresentasikan kondisi sistem secara keseluruhan \cite{Parniani2006}.
+    \item[ii.] \textbf{Kecepatan Komputasi (K2):} Sangat Tinggi. Logika adaptif berbasis formula analitik atau ANN dapat dieksekusi dalam $< 100$ ms, jauh memenuhi batasan waktu operasional \cite{Jinhua2022}.
+    \item[iii.] \textbf{Transparansi (K3):} Tinggi untuk pendekatan formula analitik \cite{Xiong2006, Zhu2021, Parniani2006}; Rendah untuk pendekatan berbasis ANN \cite{Jinhua2022} karena keputusan ANN bersifat \textit{black-box} dan sulit diaudit oleh operator.
+    \item[iv.] \textbf{Penegakan Batasan Fisik (K4):} Lemah. Pendekatan berbasis frekuensi lokal tidak secara eksplisit mempertimbangkan batasan tegangan bus, kapasitas termal saluran, maupun prioritas beban. Oleh karena itu, keputusan pelepasan dapat menghasilkan pelanggaran profil tegangan di bus lain \cite{Zhu2021}.
+    \item[v.] \textbf{Kemudahan Implementasi (K5):} Sangat Tinggi. Pendekatan ini bersifat inkremental terhadap infrastruktur UFLS yang sudah ada, tidak memerlukan platform komputasi tinggi, dan dapat diimplementasikan sebagai \textit{upgrade firmware} relai atau fungsi tambahan pada PLC eksisting.
+\end{itemize}
+
+\item[c.] \textbf{Kesimpulan Solusi 1} \\
+Pendekatan UFLS adaptif cocok sebagai solusi darurat tingkat pertama (\textit{first-line defense}) yang bereaksi sangat cepat, namun tidak memadai sebagai solusi utama karena ketidakmampuannya menegakkan batasan jaringan secara penuh dan kecenderungannya terhadap \textit{overshedding}.
+\end{enumerate}
+
+\subsection{Solusi 2: Optimasi MILP dengan Linearisasi \textit{DC Power Flow}}
+\label{subsec:Solusi_2}
+
+Pendekatan kedua merumuskan permasalahan pelepasan beban sebagai program matematis MILP yang diselesaikan oleh \textit{solver} modern. Model ini menggunakan linearisasi \textit{DC power flow} untuk mempertahankan linearitas semua batasan, memungkinkan \textit{solver} menemukan solusi optimal global yang terbukti (\textit{proven optimal}) \cite{Sarwar2020, Sarwar2022}.
+
+\begin{enumerate}
+\item[a.] \textbf{Kajian Literatur Solusi 2} \\
+Sarwar \textit{et al.} \cite{Sarwar2020} mempresentasikan formulasi MILP komprehensif untuk pelepasan beban pada sistem distribusi terisolasi (\textit{islanded}). Fungsi objektif meminimalkan total CENS berbobot prioritas beban, dengan batasan meliputi keseimbangan daya aktif, kapasitas beban, dan batas tegangan yang dilinearisasi. Hasil pengujian pada sistem uji 30-bus menunjukkan bahwa MILP mampu mengurangi \textit{overshedding} hingga 68\% dibandingkan UFLS statis, dengan waktu komputasi rata-rata 0.8 detik menggunakan \textit{solver} CPLEX \cite{Sarwar2020}.
+
+Dalam karya tindak lanjutnya, Sarwar \textit{et al.} \cite{Sarwar2022} mengintegrasikan \textit{polynomial regression} untuk memprediksi kondisi pasca-gangguan secara cepat sebagai inisialisasi hangat (\textit{warm start}) bagi \textit{solver} MILP, sehingga waktu komputasi rata-rata dapat dipangkas hingga 0.3 detik.
+
+Babagana \textit{et al.} \cite{Babagana2025} mengaplikasikan formulasi MILP serupa untuk \textit{microgrid} DC, menambahkan mekanisme \textit{timer} berbasis \textit{Sequence of Events} (SOE) yang mencatat setiap aksi pelepasan dengan presisi milidetik. Hasil studi ini relevan langsung dengan kebutuhan proyek karena mendemonstrasikan integrasi antara \textit{solver} MILP dan sistem \textit{logging} SOE berbasis PLC.
+
+Arenas \textit{et al.} \cite{Arenas2026} secara khusus mengevaluasi model MILP untuk pemilihan penyulang (\textit{feeder}) yang dilepas pada gangguan kontingensi, menggunakan data jaringan distribusi riil dari utilitas di Amerika Latin dan mengonfirmasi bahwa pendekatan MILP memberikan solusi yang secara konsisten lebih baik daripada heuristik \textit{rule-based} dalam hal minimasi CENS \cite{Arenas2026}.
+
+Colorado dan Bedrinana \cite{Colorado2018} mengkaji koordinasi antara unit pembangkit wajib-jalan (\textit{must-run}) dan pelepasan beban optimal untuk menjaga keamanan sistem tenaga, menggunakan formulasi MILP pada sistem transmisi. Studi ini mengilustrasikan bagaimana variabel kontingensi ganda (\textit{generation} + \textit{feeder}) dapat diintegrasikan dalam satu formulasi MILP tunggal tanpa kehilangan jaminan optimalitas \cite{Colorado2018}.
+
+\item[b.] \textbf{Evaluasi terhadap Kriteria K1-K5 Solusi 2}
+\begin{itemize}
+    \item[i.] \textbf{Optimalitas (K1):} Sangat Tinggi. \textit{Solver} MILP modern (Gurobi, CPLEX, HiGHS) menjamin penyelesaian mendekati optimal global dengan \textit{optimality gap} yang dapat dikontrol ($<1\%$) \cite{Sarwar2020, Sarwar2022}. Namun demikian, optimalitas ini berlaku pada model yang dilinearisasi (DC), bukan model AC penuh, sehingga terdapat \textit{gap} antara solusi MILP dan realita fisik jaringan AC terutama dalam hal profil tegangan reaktif.
+    \item[ii.] \textbf{Kecepatan Komputasi (K2):} Tinggi untuk jaringan skala sedang ($<100$ bus). Sarwar \textit{et al.} \cite{Sarwar2020} melaporkan waktu rata-rata 0.8 s, dengan \textit{warm start} \cite{Sarwar2022}, turun menjadi 0.3 s. Untuk jaringan berskala besar ($> 500$ bus), waktu komputasi dapat meningkat eksponensial tergantung pada jumlah variabel \textit{integer}.
+    \item[iii.] \textbf{Transparansi (K3):} Sangat Tinggi. Setiap variabel keputusan $z_{i}$ dan $P_{i,shed}$ memiliki interpretasi fisik yang jelas dan dapat diverifikasi. Solusi MILP dapat dijelaskan sepenuhnya kepada operator dan regulator \cite{Sarwar2020, Babagana2025}.
+    \item[iv.] \textbf{Penegakan Batasan Fisik (K4):} Tinggi untuk batasan yang dilinearisasi. Batasan kapasitas beban, keseimbangan daya aktif, dan prioritas beban dipenuhi secara \textit{hard constraint}. Batasan tegangan reaktif tidak dapat dipenuhi secara eksak karena linearisasi DC \cite{Parniani2006, Sarwar2020}.
+    \item[v.] \textbf{Kemudahan Implementasi (K5):} Tinggi. \textit{Library open-source} Python (PuLP, Pyomo, CVXPY dengan \textit{solver} HiGHS) tersedia gratis dan dapat dijalankan pada \textit{engineering workstation} standar. Integrasi dengan SCADA dapat dilakukan melalui antarmuka Python-Modbus/OPC-UA.
+\end{itemize}
+ 
+\item[c.] \textbf{Kesimpulan Solusi 2} \\
+MILP-DC merupakan kandidat utama yang paling seimbang antara optimalitas terukur, transparansi, dan kemudahan implementasi untuk skala jaringan sub-transmisi dalam proyek ini. Keterbatasan pada akurasi tegangan reaktif dapat diterima apabila batasan tegangan diperiksa ulang secara \textit{post-hoc} menggunakan \textit{solver AC power flow} setelah keputusan pelepasan dihasilkan.
+\end{enumerate}
+
+\subsection{Solusi 3: Optimasi MISOCP dengan Model Aliran Daya AC Penuh}
+\label{subsec:Solusi_3}
+
+Pendekatan ketiga mengganti linearisasi DC dengan relaksasi \textit{Second-Order Cone Programming} (SOCP) dari persamaan aliran daya AC, menghasilkan \textit{Mixed-Integer Second-Order Cone Programming} (MISOCP). Pendekatan ini memberikan akurasi tegangan yang jauh lebih baik dengan tetap mempertahankan jaminan konveksitas \cite{Maria2021, Fu2019}.
+
+\begin{enumerate}
+\item[a.] \textbf{Kajian Literatur Solusi 3} \\
+Maria dan Barredo \cite{Maria2021} mengaplikasikan \textit{Robust} MISOCP untuk penjadwalan \textit{Distributed Energy Resources} (DER) pada jaringan distribusi, membuktikan bahwa relaksasi SOCP memberikan solusi yang identik dengan aliran daya AC penuh (\textit{exact relaxation}) pada jaringan radial tanpa pembangkit terdistribusi yang menginjeksi daya ke \textit{upstream}. Studi ini menjadi landasan bahwa MISOCP adalah kandidat yang valid secara matematis untuk masalah OLS pada jaringan distribusi radial.
+
+Fu \textit{et al.} \cite{Fu2019} menggunakan kerangka MISOCP untuk penjadwalan optimal \textit{microgrid} dengan mempertimbangkan batasan aliran daya penuh. Hasil pengujian pada sistem 33-bus menunjukkan bahwa MISOCP rata-rata membutuhkan waktu komputasi 2 hingga 8 kali lebih lama dibandingkan MILP-DC untuk ukuran masalah yang setara, tetapi menghasilkan profil tegangan yang 4 hingga 7\% lebih akurat \cite{Fu2019}.
+
+Bompard \textit{et al.} \cite{Bompard2021} menyediakan analisis teoritis menyeluruh tentang stabilitas frekuensi dan tegangan secara bersamaan dalam konteks gangguan kontingensi, yang menjadi argumen kuat bahwa solusi OLS yang tidak memperhitungkan aspek tegangan reaktif secara eksplisit berpotensi menghasilkan kondisi \textit{post-shedding} yang tidak stabil dari sisi tegangan \cite{Bompard2021}.
+
+\item[b.] \textbf{Evaluasi terhadap Kriteria K1-K5 Solusi 3}
+\begin{itemize}
+    \item[i.] \textbf{Optimalitas (K1):} Sangat Tinggi dan lebih akurat dari MILP-DC. Relaksasi SOCP terbukti \textit{exact} (menghasilkan solusi identik dengan AC penuh) pada jaringan radial, memberikan jaminan kelayakan tegangan yang tidak dimiliki MILP-DC \cite{Maria2021}.
+   \item[ii.] \textbf{Kecepatan Komputasi (K2):} Menengah. \textit{Overhead} komputasi SOCP 2 hingga 8 kali lebih tinggi dari MILP-DC \cite{Fu2019}, namun masih dalam rentang yang dapat diterima ($< 10$ detik) untuk jaringan distribusi skala sedang.
+    \item[iii.] \textbf{Transparansi (K3):} Tinggi. Variabel keputusan tetap memiliki interpretasi fisik yang jelas, meskipun formulasi \textit{cone constraint} lebih abstrak dibanding MILP linier biasa.
+    \item[iv.] \textbf{Penegakan Batasan Fisik (K4):} Sangat Tinggi. Batasan tegangan AC penuh dipenuhi secara eksak (untuk jaringan radial), dan semua batasan lainnya dipertahankan sebagai \textit{hard constraint} \cite{Maria2021, Fu2019}.
+    \item[v.] \textbf{Kemudahan Implementasi (K5):} Menengah. \textit{Library} CVXPY mendukung SOCP secara \textit{native} dengan \textit{solver} seperti MOSEK atau SCS. Namun, \textit{overhead} konfigurasi dan kebutuhan lisensi MOSEK (atau performa SCS yang lebih lambat) menambah kompleksitas implementasi dibandingkan MILP-DC.
+\end{itemize}
+ 
+\item[c.] \textbf{Kesimpulan Solusi 3} \\
+\textit{Mixed-Integer Second-Order Cone Programming} (MISOCP) adalah pilihan superior dari sisi akurasi fisik, terutama untuk aplikasi dengan pelanggaran tegangan reaktif sebagai risiko utama. Dalam proyek ini, MISOCP dipertimbangkan sebagai ekstensi tahap kedua apabila validasi menunjukkan MILP-DC tidak memadai dalam menjaga profil tegangan.
+\end{enumerate}
+
+\subsection{Solusi 4: \textit{Deep Reinforcement Learning} (DRL)}
+\label{subsec:Solusi_4}
+
+Pendekatan keempat menggunakan kecerdasan buatan berbasis \textit{Deep Reinforcement Learning} (DRL), dengan agen belajar secara mandiri untuk menghasilkan kebijakan pelepasan beban melalui interaksi berulang dengan model simulasi sistem tenaga. Pendekatan ini menawarkan adaptivitas yang tidak dimiliki metode konvensional maupun optimasi matematis \cite{Chen2023, Lai2026, ChenBai2020}.
+
+\begin{enumerate}
+\item[a.] \textbf{Kajian Literatur Solusi 4} \\
+Chen \textit{et al.} \cite{Chen2023} mengaplikasikan \textit{Deep Q-Network} (DQN) untuk \textit{emergency load shedding} pada sistem dengan penetrasi EBT tinggi. Agen DRL dilatih menggunakan simulator dinamika sistem tenaga dan mampu menghasilkan keputusan pelepasan dalam $< 10$ ms pada fase inferensi. Namun, studi ini mengakui bahwa kualitas kebijakan agen sangat bergantung pada representativitas data pelatihan dan dapat menurun drastis pada skenario \textit{out-of-distribution} yang tidak pernah dijumpai selama \textit{training} \cite{Chen2023}.
+
+Lai \textit{et al.} \cite{Lai2026} mengajukan pendekatan DRL multi-objektif yang secara bersamaan mengoptimalkan stabilitas frekuensi dan mitigasi deviasi tegangan, menggunakan algoritma \textit{Proximal Policy Optimization} (PPO) dengan \textit{reward function} yang dirancang khusus. Hasil simulasi menunjukkan performa yang secara rata-rata lebih baik dari MILP pada skenario gangguan yang bervariasi, namun dengan variansi (\textit{variance}) yang lebih tinggi, artinya terdapat kasus ekstrem saat DRL menghasilkan keputusan yang jauh lebih buruk \cite{Lai2026}.
+
+Chen, Bai, dan Jun \cite{ChenBai2020} menggunakan \textit{Distributional} DDPG (D4PG) untuk menangani ketidakpastian dalam \textit{emergency control}, dan secara eksplisit mengidentifikasi masalah generalisasi sebagai hambatan utama adopsi DRL dalam operasi jaringan tenaga listrik kritis.
+
+\item[b.] \textbf{Evaluasi terhadap Kriteria K1-K5 Solusi 4}
+\begin{itemize}
+    \item[i.] \textbf{Optimalitas (K1):} Tinggi secara rata-rata pada distribusi skenario yang mirip data pelatihan, namun tidak ada jaminan optimalitas untuk skenario individual yang baru. Tidak ada \textit{optimality gap} yang dapat dikuantifikasi \cite{Chen2023, Lai2026}.
+    \item[ii.] \textbf{Kecepatan Komputasi (K2):} Sangat Tinggi pada fase inferensi ($<10-50$ ms). Namun biaya \textit{training} sangat mahal (jam hingga hari) dan harus diulang setiap kali topologi jaringan berubah signifikan \cite{Chen2023}.
+    \item[iii.] \textbf{Transparansi (K3):} Sangat Rendah. Keputusan DRL dihasilkan dari jaringan saraf dalam yang bersifat \textit{black-box}, tidak dapat dijelaskan kepada operator atau regulator, dan sulit divalidasi keamanannya secara formal \cite{Lai2026, ChenBai2020}. Ini merupakan hambatan kritis untuk adopsi dalam sistem operasi tenaga listrik yang diregulasi ketat.
+    \item[iv.] \textbf{Penegakan Batasan Fisik (K4):} Lemah tanpa modifikasi khusus. DRL standar tidak secara eksplisit menegakkan \textit{hard constraint} fisik, batasan hanya dipenuhi secara implisit melalui fungsi \textit{reward} (\textit{soft constraint}), sehingga pelanggaran tetap dapat terjadi \cite{ChenBai2020}.
+    \item[v.] \textbf{Kemudahan Implementasi (K5):} Rendah untuk konteks proyek ini. Membutuhkan model simulasi sistem tenaga yang akurat dan komprehensif sebagai \textit{environment training}, infrastruktur \textit{Graphics Processing Unit} (GPU) untuk pelatihan, dan proses validasi ekstensif yang tidak proporsional dengan lingkup proyek \textit{capstone} \cite{Chen2023}.
+\end{itemize}
+ 
+\item[c.] \textbf{Kesimpulan Solusi 4} \\
+DRL merupakan pendekatan yang menjanjikan untuk masa depan, namun tidak dipilih sebagai solusi utama proyek ini karena hambatan transparansi, penegakan \textit{hard constraint}, dan biaya implementasi yang tidak proporsional dengan sumber daya proyek \textit{capstone}.
+\end{enumerate}
+
+\subsection{Solusi 5: Algoritma Metaheuristik}
+\label{subsec:Solusi_5}
+
+Pendekatan kelima menggunakan algoritma metaheuristik berbasis populasi, seperti \textit{Grasshopper Optimization Algorithm} (GOA), \textit{Genetic Algorithm} (GA), atau \textit{Differential Evolution} (DE), untuk mencari solusi mendekati optimal tanpa memerlukan formulasi matematis yang ketat \cite{Ahmadipour2023, Qi2025}.
+
+\begin{enumerate}
+\item[a.] \textbf{Kajian Literatur Solusi 5} \\
+Ahmadipour \textit{et al.} \cite{Ahmadipour2023} mengaplikasikan \textit{Grasshopper Optimization Algorithm} (GOA) untuk menyelesaikan masalah OLS pada sistem terisoliasi dengan DER. Algoritma GOA meniru perilaku kawanan belalang untuk mengeksplorasi ruang solusi dan menemukan solusi mendekati optimal tanpa memerlukan linearisasi model. Hasil perbandingan menunjukkan GOA sedikit mengungguli \textit{Particle Swarm Optimization} (PSO) dalam hal kualitas solusi, namun membutuhkan 50 hingga 200 iterasi (rata-rata 3 sampai 15 detik) untuk konvergensi \cite{Ahmadipour2023}.
+
+Qi \textit{et al.} \cite{Qi2025} mengusulkan \textit{surrogate-assisted Proliferation-Reduction Differential Evolution} (PRDE) untuk optimasi \textit{emergency load shedding}. Penggunaan \textit{surrogate model} untuk mengevaluasi kandidat solusi secara cepat sebelum evaluasi penuh memungkinkan PRDE berkonvergensi 3 hingga 5 kali lebih cepat dibanding DE standar. Studi ini menunjukkan bahwa untuk masalah OLS berdimensi tinggi ($>200$ variabel), metaheuristik dapat menjadi alternatif yang kompetitif terhadap MILP yang waktu komputasinya meningkat secara kombinatorial \cite{Qi2025}.
+
+\item[b.] \textbf{Evaluasi terhadap Kriteria K1-K5 Solusi 5}
+\begin{itemize}
+    \item[i.] \textbf{Optimalitas (K1):} Menengah. Metaheuristik tidak memberikan jaminan optimalitas global dan hasil dapat bervariasi antar eksekusi (\textit{stochastic}). Untuk masalah OLS berukuran kecil-sedang, kualitas solusinya umumnya inferior terhadap MILP \cite{Ahmadipour2023}.
+    \item[ii.] \textbf{Kecepatan Komputasi (K2):} Rendah hingga Menengah. Kebutuhan evaluasi ratusan hingga ribuan kandidat solusi membuat waktu komputasi 3 sampai 30 detik, umumnya lebih lambat dari MILP untuk ukuran masalah setara \cite{Qi2025}.
+    \item[iii.] \textbf{Transparansi (K3):} Rendah. Tidak ada interpretasi matematis yang jelas terhadap proses pencarian dan solusi yang dihasilkan, meskipun solusi akhir berupa nilai variabel yang dapat diinterpretasikan.
+    \item[iv.] \textbf{Penegakan Batasan Fisik (K4):} Menengah. Batasan dapat diinkorporasikan melalui fungsi penalti, namun tidak ada jaminan bahwa solusi akhir memenuhi semua \textit{hard constraint} \cite{Ahmadipour2023}.
+    \item[v.] \textbf{Kemudahan Implementasi (K5):} Menengah. Implementasi algoritma metaheuristik relatif fleksibel dan tidak memerlukan \textit{library solver} khusus, namun \textit{tuning} parameter (ukuran populasi, faktor mutasi, dll.) memerlukan eksperimen yang ekstensif.
+\end{itemize}
+ 
+\item[c.] \textbf{Kesimpulan Solusi 5} \\
+Metaheuristik relevan sebagai pendekatan alternatif untuk validasi atau sebagai \textit{benchmark} perbandingan, namun tidak dipilih sebagai solusi utama karena inferioritas pada hampir semua kriteria dibandingkan MILP-DC.
+\end{enumerate}
+
+\section{Analisis Literatur untuk Permasalahan Pemulihan (P3)}
+\label{sec:Analisis_Literatur_Pemulihan}
+
+Permasalahan pemulihan beban (P3) memiliki literatur yang lebih terbatas dibanding OLS, namun sejumlah pustaka kunci telah diidentifikasi yang relevan untuk merancang algoritma pemulihan terstruktur dalam proyek ini.
+
+\subsection{Optimasi Pemulihan Jaringan Dua Tahap}
+\label{subsec:Optimasi_Pemulihan_Jaringan_Dua_Tahap}
+
+Liao \textit{et al.} \cite{Liao2019} mengajukan metode optimasi dua tahap untuk pemulihan jaringan dan beban pasca-gangguan: tahap pertama mengoptimalkan konfigurasi jaringan (rekonfigurasi \textit{switching}) untuk memaksimalkan konektivitas, tahap kedua mengoptimalkan penjadwalan pembangkitan dan pemulihan beban. Formulasi menggunakan \textit{Mixed-Integer Programming} (MIP) pada kedua tahap dan diujikan pada sistem 30-bus dan 118-bus IEEE. Studi ini relevan langsung karena mendemonstrasikan bagaimana batasan \textit{sequencing} (urutan pemulihan) dapat diintegrasikan ke dalam formulasi optimasi tanpa meningkatkan kompleksitas secara berlebihan \cite{Liao2019}.
+
+\subsection{Pemulihan Berbasis \textit{Demand-Side Resources}}
+\label{subsec:Pemulihan_Berbasis_DSR}
+
+Dou \textit{et al.} \cite{Dou2023} mengembangkan metode optimasi pemulihan cepat pasca-UFLS yang mengintegrasikan sumber daya sisi permintaan (\textit{Demand-Side Resources}/DSR), termasuk fleksibilitas beban industri dan penyimpanan energi, ke dalam penjadwalan pemulihan. Formulasi yang digunakan adalah optimasi linier berbobot yang memperhitungkan prioritas beban, ketersediaan cadangan, dan batasan RoCoF pada setiap langkah pemulihan. Studi ini mengonfirmasi bahwa pendekatan berbasis optimasi dapat mempercepat pemulihan hingga 35\% dibandingkan prosedur manual konvensional \cite{Dou2023}.
+
+\subsection{Otomasi Rencana Pemulihan Berbasis SCADA}
+\label{subsec:Otomasi_Rencana_Pemulihan_Berbasis_SCADA}
+
+Jang \textit{et al.} \cite{Jang2021} mengkaji pengembangan rencana pemulihan otomatis berbasis data SCADA, dengan fokus pada batasan \textit{sequencing} dan validasi otomatis terhadap standar operasi utilitas. Studi ini relevan karena mengidentifikasi bahwa hambatan utama otomasi pemulihan bukan pada kompleksitas algoritma, melainkan pada integrasi dengan prosedur operasi standar (\textit{Standard Operating Procedure}/SOP) utilitas yang sering kali tidak terdokumentasi secara formal \cite{Jang2021}. Oleh karena itu, dalam proyek ini, algoritma pemulihan dirancang dengan menyediakan parameter prioritas yang dapat dikonfigurasi oleh operator.
+
+\section{Analisis Literatur untuk Integrasi SCADA (P2)}
+\label{sec:Analisis_Literatur_Integrasi_SCADA}
+
+Selain aspek algoritma, proyek ini juga memerlukan fondasi pustaka yang kuat untuk aspek integrasi antara modul optimasi dengan infrastruktur SCADA.
+
+Farhadi \textit{et al.} \cite{Farhadi2022} mengkaji peningkatan pengendalian preventif berbasis SCADA di bawah kendala anggaran, mengusulkan kerangka optimasi yang mempertimbangkan keterbatasan kapasitas komputasi SCADA \textit{master station}. Temuan kunci yang relevan adalah bahwa \textit{bottleneck} utama sistem SCADA untuk aplikasi optimasi \textit{real-time} terletak pada latensi komunikasi (bukan kecepatan komputasi \textit{solver}), sehingga desain arsitektur komunikasi antara modul OLS dan RTU/PLC menjadi faktor kritis \cite{Farhadi2022}.
+
+Parniani dan Nasri \cite{Parniani2006} secara spesifik mendemonstrasikan integrasi UFLS berbasis SCADA dengan pengukuran RoCoF, menggunakan infrastruktur komunikasi SCADA eksisting tanpa modifikasi \textit{hardware}. Pendekatan ini menunjukkan bahwa integrasi modul kendali baru ke dalam SCADA eksisting dapat dilakukan secara non-invasif melalui antarmuka perangkat lunak \cite{Parniani2006}.
+
+Saleh \textit{et al.} \cite{Saleh2022} mengkaji metode penilaian fungsi \textit{smart grid} berbasis CENS untuk beban residensial, memberikan kerangka yang berguna untuk mengkuantifikasi dampak ekonomis dari kebijakan pelepasan beban yang berbeda, relevan untuk mendefinisikan bobot $w_{i}$ dalam fungsi objektif optimasi \cite{Saleh2022}.
+
+\section{Matriks Perbandingan Menyeluruh dan Justifikasi Solusi Terpilih}
+\label{sec:Matriks_Perbandingan_Menyeluruh}
+
+Tabel \ref{tab:matriks_perbandingan} menyajikan matriks perbandingan komprehensif dari kelima pendekatan solusi terhadap kriteria evaluasi K1-K5. Setiap sel menunjukkan penilaian kualitatif yang didukung oleh temuan literatur yang dikaji.
+
+\begin{longtable}{|p{2.5cm}|p{2cm}|p{2cm}|p{2cm}|p{2cm}|p{2.5cm}|}
+\caption{Matriks Perbandingan Pendekatan Solusi}
+\label{tab:matriks_perbandingan} \\
+\hline
+\textbf{Kriteria} & \textbf{UFLS Adaptif} & \textbf{MILP-DC} & \textbf{MISOCP} & \textbf{Deep RL} & \textbf{Metaheuristik} \\ \hline
+\endfirsthead
+
+\multicolumn{6}{c}%
+{{}} \\
+\hline
+\textbf{Kriteria} & \textbf{UFLS Adaptif} & \textbf{MILP-DC} & \textbf{MISOCP} & \textbf{Deep RL} & \textbf{Metaheuristik} \\ \hline
+\endhead
+
+
+
+\hline
+\multicolumn{6}{|l|}{\small * Hanya pada distribusi skenario yang mirip data pelatihan, tidak ada jaminan per-\textit{instance}.} \\
+\multicolumn{6}{|l|}{\small ** Hanya pada fase inferensi; biaya \textit{training} diabaikan dalam skor ini.} \\
+\hline
+\endlastfoot
+
+Optimalitas (K1) & Menengah & Sangat Tinggi & Sangat Tinggi & Tinggi* & Menengah \\ \hline
+Kecepatan (K2) & Sangat Tinggi & Tinggi & Menengah & Sangat Tinggi** & Lemah-Menengah \\ \hline
+Transparansi (K3) & Tinggi & Sangat Tinggi & Tinggi & Sangat Rendah & Rendah \\ \hline
+Batasan Fisik (K4) & Lemah & Tinggi & Sangat Tinggi & Lemah & Menengah \\ \hline
+Implementasi (K5) & Sangat Tinggi & Tinggi & Menengah & Rendah & Menengah \\
+\end{longtable}
+
+Berdasarkan matriks perbandingan pada tabel \ref{tab:matriks_perbandingan}, pendekatan MILP-DC menunjukkan performa paling unggul secara keseluruhan karena memperoleh penilaian sangat tinggi pada aspek optimalitas, transparansi, serta kemampuan menangani batasan sistem, dengan implementasi yang masih relatif praktis. Dengan mempertimbangkan keseimbangan antara kualitas solusi, kecepatan komputasi, dan kelayakan penerapan pada lingkup proyek, metode ini dipilih sebagai solusi utama dalam proyek \textit{capstone} ini. Justifikasi pemilihan adalah sebagai berikut:
+
+\begin{enumerate}
+    \item[a.] Optimalitas terukur dan terbukti. MILP-DC menjamin solusi dengan \textit{optimality gap} $< 1\%$ yang dapat dikuantifikasi, berbeda dengan DRL yang hanya memberikan performa rata-rata yang baik tanpa jaminan per-\textit{instance} \cite{Sarwar2020, Sarwar2022}.
+    \item[b.] Transparansi untuk lingkungan operasi kritis. Setiap keputusan pelepasan beban dapat dijelaskan, diverifikasi, dan dicatat dalam log SOE, persyaratan fundamental yang tidak dapat dipenuhi oleh DRL \cite{Babagana2025}.
+    \item[c.] Penegakan \textit{hard constraint} eksplisit. Batasan tegangan, kapasitas saluran, dan perlindungan beban kritis diperlakukan sebagai \textit{hard constraint} yang tidak dapat dilanggar, berbeda dengan pendekatan berbasis \textit{reward function} \cite{Sarwar2020, Arenas2026}.
+    \item[d.] Kecepatan komputasi yang memadai untuk skala proyek. Dengan \textit{warm start} dan \textit{solver} HiGHS \textit{open-source}, waktu komputasi $< 1$ detik dapat dicapai pada jaringan skala laboratorium ($<30$ bus) \cite{Sarwar2022}.
+    \item[e.] Ekosistem implementasi yang matang. \textit{Library} Python (Pyomo/CVXPY + HiGHS) bersifat \textit{open-source}, terdokumentasi baik, dan dapat diintegrasikan dengan antarmuka SCADA-PLC melalui protokol Modbus TCP \cite{Babagana2025, Colorado2018}.
+\end{enumerate}
+
+Pendekatan MISOCP dipertimbangkan sebagai ekstensi tahap lanjutan apabila validasi eksperimental menunjukkan ketidakcukupan akurasi tegangan dari MILP-DC. Pendekatan UFLS adaptif dipertahankan sebagai lapisan pertahanan pertama (\textit{first-line defense}) berbasis \textit{hardware} yang tetap aktif secara paralel dengan modul OLS sebagai \textit{failsafe}.
+
+\section{Analisis Kesenjangan Literatur dan Kontribusi Proyek}
+\label{sec:Analisis_Kesenjangan_Literatur}
+
+Dari kajian literatur yang telah dilakukan, terdapat beberapa kesenjangan yang belum terjawab secara menyeluruh dalam literatur yang ada dan menjadi ruang kontribusi proyek \textit{capstone} ini.
+
+\begin{itemize}
+    \item[a.] \textbf{Integrasi OLS dengan pemulihan dalam satu platform SCADA (Kesenjangan 1):} Sebagian besar literatur membahas OLS dan pemulihan beban sebagai masalah yang terpisah \cite{Sarwar2020, Liao2019, Dou2023}. Belum banyak studi yang mengintegrasikan keduanya dalam satu modul terintegrasi yang beroperasi pada platform SCADA industri nyata. Proyek ini berkontribusi melalui pengembangan modul tunggal yang menangani siklus lengkap, mulai dari deteksi anomali, penentuan OLS secara optimal, hingga proses pemulihan sistem secara terstruktur.
+    \item[b.] \textbf{Validasi pada \textit{hardware-in-the-loop} dengan PLC industri (Kesenjangan 2):} Studi Sarwar \textit{et al.} \cite{Sarwar2020, Sarwar2022} dan Babagana \textit{et al.} \cite{Babagana2025} melakukan validasi pada simulasi perangkat lunak murni (\textit{Software-in-the-Loop}). Proyek ini berkontribusi dengan memvalidasi modul OLS pada lingkungan semi-\textit{hardware} menggunakan PLC Schneider Electric dan generator/\textit{load simulator} fisik, yang merupakan langkah lebih dekat ke implementasi industri nyata.
+    \item[c.] \textbf{Penanganan kontingensi ganda (N-2) secara simultan (Kesenjangan 3):} Mayoritas literatur OLS berbasis MILP membahas kontingensi tunggal N-1 \cite{Sarwar2020, Arenas2026}. Studi Colorado dan Bedrinana \cite{Colorado2018} membahas kombinasi pembangkit dan saluran, namun pada konteks transmisi. Proyek ini mengeksplorasi formulasi MILP untuk kontingensi ganda (\textit{generation} + \textit{feeder}) pada jaringan sub-transmisi sebagai skenario pengujian kritis.
+\end{itemize}

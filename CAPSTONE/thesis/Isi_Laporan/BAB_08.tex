@@ -1,0 +1,666 @@
+% Catatan: Pastikan preamble dokumen utama mengandung:
+%   \usepackage{longtable}
+%   \usepackage{booktabs}  (opsional, tidak digunakan di sini)
+%   \usepackage{tabularx}  (tidak digunakan di sini)
+
+Sistem yang dirancang pada proyek ini merupakan \textit{Digital Twin Real-Time} berbasis SCADA (\textit{Supervisory Control and Data Acquisition}) untuk simulasi Sistem Tenaga Listrik skala industri.
+Sistem ini bertujuan untuk mensimulasikan secara interaktif dinamika frekuensi transien pada jaringan listrik, merespons kondisi kontingensi pembangkit, serta melakukan optimasi pelepasan beban (\textit{Under-Frequency Load Shedding} / UFLS) menggunakan algoritma \textit{Mixed-Integer Linear Programming} (MILP).
+
+Secara fungsional, sistem ini meniru ekosistem otomasi industri nyata yang terdiri dari \textbf{tiga lapisan (\textit{layer})} yang saling berinteraksi melalui protokol komunikasi standar industri \textbf{Modbus TCP/IP}:
+
+\begin{enumerate}
+    \item[a.] \textbf{\textit{Layer} 1 / \textit{Physics Engine} (\texttt{load.py}):}
+    Mesin fisika diferensial yang memodelkan dinamika jaringan listrik secara numerik, mencakup persamaan ayunan (\textit{Swing Equation}), \textit{Governor Droop Control}, dan \textit{Automatic Generation Control} (AGC).
+
+    \item[b.] \textbf{\textit{Layer} 2 / Virtual PLC} (Schneider EcoStruxure Machine Expert -- Basic):
+    Perangkat lunak PLC virtual yang merepresentasikan kontrol logika industri berbasis \textit{Ladder Diagram} (LD) dengan arsitektur \textit{fail-safe}, bertindak sebagai perantara memori (\textit{Holding Registers} \& \textit{Coils}) antara \textit{Physics Engine} dan SCADA Master.
+
+    \item[c.] \textbf{\textit{Layer} 3 / SCADA Master \& Web HMI (\texttt{app.py}):}
+    Server kontrol pusat sekaligus antarmuka \textit{Control Room} berbasis web yang melakukan \textit{polling} data PLC, menjalankan \textit{solver} MILP, dan menyiarkan telemetri ke operator via WebSocket (Socket.IO).
+\end{enumerate}
+
+\section{Arsitektur Sistem}
+\label{sec:Arsitektur_Sistem}
+
+Arsitektur sistem pada proyek ini dirancang secara modular dengan menerapkan pemisahan fungsi (\textit{separation of concerns}) yang jelas antara mesin simulasi fisika, logika kendali tingkat lapangan (\textit{field layer}), dan pusat pengawasan \textit{real-time}. Pendekatan berlapis (\textit{layered approach}) tersebut tidak hanya mempermudah proses isolasi kesalahan (\textit{troubleshooting}) dan pengujian independen pada setiap subsistem, tetapi juga mendukung skalabilitas serta fleksibilitas sistem saat bertransisi dari lingkungan simulasi murni (\textit{Software-in-the-Loop}) menuju implementasi yang terintegrasi dengan perangkat keras fisik (\textit{Hardware-in-the-Loop}). Hierarki komponen dan mekanisme pertukaran data antar lapisan dirancang untuk memastikan integrasi sistem yang terstruktur dan andal.
+
+\subsection{Diagram Blok Arsitektur}
+
+Gambar~\ref{fig:arsitektur_sistem} menunjukkan diagram blok arsitektur komunikasi antar lapisan sistem secara keseluruhan.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{gambar_8_1.png}
+    \caption{Diagram Blok Arsitektur Sistem SCADA \textit{Digital Twin}}
+    \label{fig:arsitektur_sistem}
+\end{figure}
+
+\subsection{Alur Komunikasi Data}
+
+Aliran data dalam sistem berjalan secara \textbf{dua arah} dan \textbf{berulang setiap 100 ms (10 Hz)}.
+Tabel~\ref{tab:komunikasi} merangkum seluruh jalur komunikasi data antar komponen sistem.
+
+\begin{longtable}{|p{1.8cm}|p{2.4cm}|p{2.2cm}|p{2.2cm}|p{5.8cm}|}
+    \caption{Alur Komunikasi Data Antar Lapisan Sistem}
+    \label{tab:komunikasi}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Arah} & \textbf{Sumber} & \textbf{Protokol} & \textbf{Tujuan} & \textbf{Isi Data} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Arah} & \textbf{Sumber} & \textbf{Protokol} & \textbf{Tujuan} & \textbf{Isi Data} \\ \hline
+    \endhead
+    \textit{Write} ($\uparrow$) & \textit{Physics Engine} & Modbus TCP & Virtual PLC &
+        Daya beban aktual (\%MW0--\%MW11), daya generator (\%MW30--\%MW33), frekuensi (\%MW54), jam simulasi (\%MW20--\%MW21) \\ \hline
+    \textit{Read} ($\downarrow$) & \textit{Physics Engine} & Modbus TCP & Virtual PLC &
+        Status \textit{coil breaker} beban \& generator (\%M21--\%M32, \%M50--\%M53) \\ \hline
+    \textit{Polling} ($\uparrow$) & SCADA Master & Modbus TCP & Virtual PLC &
+        Baca semua sensor dan status \textit{breaker} \\ \hline
+    \textit{Write} ($\downarrow$) & SCADA Master & Modbus TCP & Virtual PLC &
+        Perintah \textit{trip/restore} hasil komputasi MILP (\%M21--\%M32) \\ \hline
+    \textit{Broadcast} ($\rightarrow$) & SCADA Master & Socket.IO & Web HMI &
+        Paket telemetri 10 FPS: frekuensi, daya gen/beban, defisit, status \textit{breaker}, matriks kontingensi, log alarm \\ \hline
+    \textit{Control} ($\leftarrow$) & Web HMI & Socket.IO & SCADA Master &
+        Perintah \textit{trip/restore} generator, \textit{override} beban, perubahan prioritas UFLS \\ \hline
+\end{longtable}
+
+\section{Perancangan Subsistem}
+\label{sec:Perancangan_Subsistem}
+
+Untuk merealisasikan arsitektur berlapis yang telah dirancang, keseluruhan sistem dikembangkan menggunakan pendekatan modular yang membaginya ke dalam beberapa subsistem fungsional yang saling melengkapi. Setiap subsistem memiliki tugas dan parameter spesifik dalam ekosistem \textit{Digital Twin}, mulai dari pemodelan komputasional dinamika sistem tenaga listrik, representasi kendali dan proteksi pada lapisan perangkat keras, hingga implementasi algoritma optimasi serta visualisasi interaktif pada pusat kendali utama. Struktur, variabel desain, dan mekanisme kerja masing-masing subsistem dirancang secara terintegrasi untuk mendukung kinerja sistem secara menyeluruh.
+
+\subsection{Subsistem \textit{Physics Engine} (\texttt{load.py})}
+\label{subsec:Physics_Engine}
+
+\textit{Physics Engine} merupakan mesin simulasi diferensial yang berjalan secara independen dalam kontainer Docker terpisah.
+Tugasnya adalah memodelkan perilaku fisika jaringan listrik secara numerik dan mengirimkan hasilnya ke Virtual PLC setiap 100 ms.
+
+\begin{enumerate}
+\item[a.] \textbf{Pemodelan Beban Dinamis (\textit{Dynamic Load Profiling})}
+
+Sistem mensimulasikan 12 titik beban (L101--L405) dengan profil konsumsi daya yang berfluktuasi secara realistis.
+Nilai dasar setiap beban dibaca dari dataset historis (\texttt{beban\_grid.csv}). Di atas nilai dasar tersebut, sistem menyuntikkan:
+
+\begin{itemize}
+    \item[i.] \textbf{Fluktuasi Harian Sinusoidal:} Membedakan karakter konsumsi daya pada jam WBP (\textit{Waktu Beban Puncak}, sore--malam) dan LWBP (\textit{Luar Waktu Beban Puncak}, dini hari).
+    \item[ii.] \textbf{Injeksi \textit{Random Noise}:} \textit{Random Number Generator} (RNG) menambahkan gangguan mikro-deterministik agar nilai daya berfluktuasi layaknya konsumsi nyata di lapangan.
+    \item[iii.] \textbf{Mode \textit{Override} dari HMI:} Jika operator mengirimkan perintah \texttt{set\_load\_interrupt} via HMI, \textit{Physics Engine} membaca nilai paksaan dari register \%MW40--\%MW51 dan menggantinya dengan nilai statis yang ditentukan operator.
+\end{itemize}
+
+\item[b.] \textbf{Pemodelan Dinamika Generator}
+
+Empat unit pembangkit disimulasikan dengan karakteristik berbeda sebagaimana ditunjukkan pada Tabel~\ref{tab:gen_overview}.
+
+\begin{longtable}{|l|l|c|c|c|}
+    \caption{Karakteristik Dinamis Generator}
+    \label{tab:gen_overview}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Generator} & \textbf{Tipe} & \textbf{Kapasitas (MW)} & \textbf{Inersia $H$ (s)} & \textbf{Droop $R$ (\%)} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Generator} & \textbf{Tipe} & \textbf{Kapasitas (MW)} & \textbf{Inersia $H$ (s)} & \textbf{\textit{Droop} $R$ (\%)} \\ \hline
+    \endhead
+    PLTA  & \textit{Hydro}       & 75            & 5,0          & 5 \\ \hline
+    PLTS  & \textit{Solar+BESS}  & 25            & 0,5          & 2 \\ \hline
+    PLTGU & \textit{Gas Turbine} & 75            & 4,0          & 4 \\ \hline
+    PLTB  & \textit{Wind}        & 25            & 1,0          & 4 \\ \hline
+    \textbf{Total} & --- & \textbf{200} & ---          & --- \\ \hline
+\end{longtable}
+
+\item[c.] \textbf{Persamaan Dinamika Frekuensi}
+
+Dinamika frekuensi transien dimodelkan menggunakan \textbf{Persamaan Ayunan (\textit{Swing Equation})} dengan integrasi numerik metode Euler:
+
+\begin{equation}
+    \frac{df}{dt} = \frac{f_{\mathrm{nom}}}{2\,H_{\mathrm{eff}}}
+    \left(\Delta P_{\mathrm{pu}} - P_{\mathrm{damping}}\right)
+    \label{eq:swing}
+\end{equation}
+
+\begin{equation}
+    f_{t+\Delta t} = f_{t} + \frac{df}{dt} \cdot \Delta t
+    \label{eq:euler}
+\end{equation}
+
+\noindent dengan:\\
+$f_{\mathrm{nom}} = 50{.}0$ Hz: frekuensi nominal jaringan,\\
+$H_{\mathrm{eff}}$: konstanta inersia efektif gabungan generator yang sedang \textit{online},\\
+$\Delta P_{\mathrm{pu}} = (P_{\mathrm{Gen}} - P_{\mathrm{Load}}) / S_{\mathrm{Base}}$: defisit daya jaringan dalam per unit,\\
+$P_{\mathrm{damping}}$: faktor redaman beban alami (motor industri),\\
+$\Delta t = 0{.}1$ s: resolusi komputasi (10 FPS).\\
+
+\item[d.] \textbf{\textit{Governor Droop Control} (Kontrol Primer)}
+
+Sebagai respons terhadap deviasi frekuensi, setiap generator yang \textit{online} secara otomatis menyesuaikan daya mekaniknya:
+
+\begin{equation}
+    \Delta P_{\mathrm{target}} =
+    -\frac{f - f_{\mathrm{nom}}}{f_{\mathrm{nom}}}
+    \cdot \frac{1}{R} \cdot P_{\mathrm{rated}}
+    \label{eq:droop}
+\end{equation}
+
+\item[e.] \textbf{\textit{Automatic Generation Control} / AGC (Kontrol Sekunder)}
+
+Setelah \textit{Droop Control} menghentikan kejatuhan frekuensi pada titik tunak (\textit{steady state}) tertentu (misalnya 49.8 Hz), AGC berbasis kontroler integral bekerja secara bertahap mendorong frekuensi kembali menuju 50.0 Hz sesuai \textit{ramp rate} masing-masing mesin.
+\end{enumerate}
+
+\subsection{Subsistem Virtual PLC}
+\label{subsec:Virtual_PLC}
+
+Virtual PLC disimulasikan menggunakan perangkat lunak \textbf{Schneider Electric EcoStruxure Machine Expert -- Basic} yang mengonfigurasi arsitektur PLC Modicon M221 (\texttt{TM221ME16R/G}) sebagai \textbf{Modbus TCP Server} pada \textit{Port} 502.
+
+\begin{enumerate}
+\item[a.] \textbf{Arsitektur Perangkat Keras yang Disimulasikan}
+
+Subsistem ini merepresentasikan konfigurasi perangkat keras yang digunakan pada implementasi aktual, sehingga proses simulasi dan integrasi dapat dilakukan dengan karakteristik komunikasi serta kendali yang konsisten terhadap sistem fisik. Komponen yang direpresentasikan meliputi:
+
+\begin{itemize}
+    \item[i.] \textbf{\textit{Controller} Utama:} Modicon M221 (\texttt{TM221ME16R/G})
+    \item[ii.] \textbf{Modul Ekspansi:} \texttt{TM3DQ8R/G} (\textit{Digital Output Relay}, 8 kanal) dan \texttt{TM3AI8/G} (Analog Input, 8 kanal) $\times$ 2 buah
+    \item[iii.] \textbf{\textit{Interface} Komunikasi:} \textit{Ethernet} ETH1 dikonfigurasi sebagai Modbus TCP Server (\textit{Port} 502)
+\end{itemize}
+
+\item[b.] \textbf{Peta Memori (\textit{Memory Word Mapping})}
+
+Tabel~\ref{tab:peta_memori} menunjukkan pemetaan lengkap alamat memori PLC yang menjadi tulang punggung pertukaran data antar lapisan sistem.
+
+\begin{longtable}{|p{2.6cm}|c|p{2.0cm}|p{5.2cm}|p{2.8cm}|}
+    \caption{Peta Memori Modbus Virtual PLC}
+    \label{tab:peta_memori}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Alamat} & \textbf{Jml.} & \textbf{Tipe} & \textbf{Fungsi} & \textbf{Akses} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Alamat} & \textbf{Jml.} & \textbf{Tipe} & \textbf{Fungsi} & \textbf{Akses} \\ \hline
+    \endhead
+    \texttt{\%MW0--\%MW11}  & 12 reg & \textit{Holding Reg} & Nilai daya beban aktual L101--L405 (MW integer) & W: \texttt{load.py} / R: \texttt{app.py} \\ \hline
+    \texttt{\%MW20--\%MW21} & 2 reg  & \textit{Holding Reg} & Jam dan Menit simulasi \textit{real-time} & W: \texttt{load.py} / R: \texttt{app.py} \\ \hline
+    \texttt{\%MW30--\%MW33} & 4 reg  & \textit{Holding Reg} & Daya output PLTA/PLTS/PLTGU/PLTB (MW) & W: \texttt{load.py} / R: \texttt{app.py} \\ \hline
+    \texttt{\%MW40--\%MW51} & 12 reg & \textit{Holding Reg} & \textit{Force override} beban dari HMI (0=AUTO, $>$0=MW) & W: \texttt{app.py} / R: \texttt{load.py} \\ \hline
+    \texttt{\%MW52--\%MW55} & 4 reg  & \textit{Holding Reg} & \textit{Force override} generator dari HMI & W: \texttt{app.py} / R: \texttt{load.py} \\ \hline
+    \texttt{\%MW54}         & 1 reg  & \textit{Holding Reg} & Frekuensi $\times 100$ (5000 = 50.0 Hz) & W: \texttt{load.py} / R: \texttt{app.py} \\ \hline
+    \texttt{\%M10--\%M13}   & 4 bit  & \textit{Memory Coil} & Status fisik generator (1=Online, 0=Offline) & W: \texttt{load.py} / R: \texttt{app.py} \\ \hline
+    \texttt{\%M21--\%M32}   & 12 bit & \textit{Memory Coil} & Perintah UFLS \textit{trip} beban dari MILP (1=Putus) & W: \texttt{app.py} / R: \texttt{load.py} \\ \hline
+    \texttt{\%M50--\%M53}   & 4 bit  & \textit{Memory Coil} & \textit{Override trip} generator dari HMI & W: \texttt{app.py} / R: \texttt{load.py} \\ \hline
+    \texttt{\%M60--\%M71}   & 12 bit & \textit{Memory Coil} & \textit{Feedback} status aktual \textit{coil} beban & W: PLC Ladder / R: \texttt{app.py} \\ \hline
+\end{longtable}
+
+\item[c.] \textbf{Logika Kontrol \textit{Ladder Diagram} (\textit{Fail-Safe})}
+
+Semua logika kontrol diimplementasikan menggunakan skema \textit{Ladder Diagram} dengan prinsip \textit{fail-safe}:
+
+\begin{itemize}
+    \item[i.] \textbf{Kontrol Generator (Rung 0 - 3):}
+    Generator aktif (\texttt{\%Q0.x} = ON) hanya jika sensor fisik menyatakan \textit{online} (\texttt{\%M1x} = 1) \textbf{DAN} tidak ada perintah \textit{trip} dari SCADA (\texttt{\%M5x} = 0). Jika SCADA mengirim perintah \textit{trip}, kontak \textit{Normally Closed} terbuka dan generator terputus dari jaringan.
+
+    \item[ii.] \textbf{Kontrol Beban / UFLS (Rung 4 - 15):}
+    Beban aktif secara \textit{default} (register UFLS = 0, kontak NC mengalirkan arus). Saat MILP menetapkan \texttt{\%M21} = 1, kontak terbuka secara instan dan suplai beban terputus.
+\end{itemize}
+\end{enumerate}
+
+\subsection{Subsistem SCADA Master (\texttt{app.py})}
+\label{subsec:SCADA_Master}
+
+SCADA Master merupakan inti sistem kontrol yang dibangun menggunakan \textbf{Python + Flask + Socket.IO}.
+Sistem ini berjalan dalam kontainer Docker tersendiri dan mengorkestrasi seluruh fungsi cerdas sistem.
+
+\begin{enumerate} 
+\item[a.] \textbf{Arsitektur \textit{Multi-threading}}
+
+SCADA Master menggunakan model pemrograman \textit{multi-thread} untuk memisahkan beban komputasi:
+
+\begin{itemize}
+    \item[i.] \textbf{\textit{Thread} Utama:} Menjalankan Flask Web Server (\textit{port} 5000) dan Socket.IO \textit{event handler}.
+    \item[ii.] \textbf{\textit{Thread Background Monitoring}:} \textit{Loop} 10 Hz yang melakukan \textit{polling} PLC, mengevaluasi MILP, dan menyiarkan telemetri.
+    \item[iii.] \textbf{\textit{Thread Load Flow (On-Demand)}:} Dipicu secara asinkron setiap ada perubahan status \textit{breaker} atau setiap 3 detik, tanpa memblokir \textit{loop} utama.
+\end{itemize}
+
+\item[b.] \textbf{Algoritma \textit{Mixed-Integer Linear Programming} (MILP)}
+
+Ketika frekuensi jaringan turun menyentuh $f \leq 49{.}0$ Hz, SCADA memformulasikan masalah pemutusan beban sebagai problem optimasi MILP menggunakan \textit{library} \texttt{PuLP} dengan \textit{solver} CBC.
+Variabel keputusan $x_i \in \{0, 1\}$ menyatakan status setiap beban ($x_i = 0$: beban $i$ dipadamkan; $x_i = 1$: beban $i$ dipertahankan). Fungsi objektif yang diminimalkan adalah:
+
+\begin{equation}
+    \min \sum_{i=1}^{N} (1 - x_i)\, P_i\, W_i
+    \label{eq:milp_obj}
+\end{equation}
+
+\noindent dengan kendala daya:
+
+\begin{equation}
+    \sum_{i=1}^{N} (1 - x_i)\, P_i \geq P_{\mathrm{Defisit}}
+    \label{eq:milp_const}
+\end{equation}
+
+\noindent dengan $P_i$ adalah daya aktual beban $i$ (MW) dan $W_i$ adalah abstraksi bobot penalti logaritmik berdasarkan orde kerugian finansial CENS standar IEEE 493 yang nilainya ditunjukkan pada Tabel~\ref{tab:prioritas_milp}.
+
+\begin{longtable}{|l|c|p{5.5cm}|c|}
+    \caption{Bobot Prioritas MILP Berdasarkan Level Utilitas Beban}
+    \label{tab:prioritas_milp}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Level Prioritas} & \textbf{Kode} & \textbf{Contoh Fasilitas} & \textbf{Bobot $W_i$} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Level Prioritas} & \textbf{Kode} & \textbf{Contoh Fasilitas} & \textbf{Bobot $W_i$} \\ \hline
+    \endhead
+    Non-Esensial & 2 & Kawasan Industri Umum (L101, L201, L305, L401) & 1 \\ \hline
+    Esensial     & 3 & Layanan Penting (L301, L302, L402) & 10 \\ \hline
+    Kritis/VIP   & 4 & Fasilitas Kritis (L403, L404, L405) & 100 \\ \hline
+\end{longtable}
+
+\item[c.] \textbf{Mekanisme Anti-Osilasi (\textit{Anti-Oscillation})}
+
+Untuk mencegah osilasi \textit{breaker} akibat dua beban berprioritas sama yang terus-menerus ditukar oleh \textit{solver}, algoritma menerapkan \textbf{Diskon Penalti 10\%} pada beban yang sedang padam:
+
+\begin{equation}
+    W_i^{\mathrm{eff}} = W_i \times 0{.}90
+    \quad \text{(jika beban } i \text{ sedang dalam kondisi \textit{trip})}
+    \label{eq:anti_osc}
+\end{equation}
+
+Diskon ini mencegah pertukaran sia-sia antara dua beban berprioritas sama, namun tidak cukup besar untuk mengalahkan perbedaan antar tingkat prioritas yang berbeda.
+
+\item[d.] \textbf{\textit{Dynamic Priority Swapping}}
+
+Jika operator mengubah prioritas sebuah beban yang sedang padam menjadi Kritis (P4), bobot barunya ($W_i = 100$) jauh melampaui diskon anti-osilasi ($W_i \times 0{.}90 = 90$).
+Akibatnya, pada siklus komputasi berikutnya, solver secara otomatis akan merestorasi beban Kritis tersebut dan mengorbankan beban Non-Esensial lain sebagai penggantinya.
+
+\item[e.] \textbf{Matriks Kontingensi N-1 (\textit{Predictive Analysis})}
+
+Bahkan saat jaringan stabil di 50 Hz, SCADA secara terus-menerus mensimulasikan skenario kegagalan tunggal (N-1) untuk setiap generator yang sedang \textit{online}.
+Hasil analisis prediktif ini menampilkan kandidat beban yang akan dikorbankan apabila generator tersebut tiba-tiba gagal, sehingga operator dapat mengambil tindakan antisipatif sebelum insiden terjadi.
+
+\item[f.] \textbf{\textit{Live Load Flow Analysis} (Asinkronus)}
+
+Setiap kali terjadi perubahan status \textit{breaker} atau setiap 3 detik, modul \texttt{loadflow\_module.py} dijalankan dalam \textit{background thread} terpisah untuk menghitung aliran daya jaringan transmisi secara nyata.
+Hasil komputasi ini dikirimkan ke HMI untuk memperbarui visualisasi \textit{Single Line Diagram} (SLD) tanpa mengganggu \textit{loop} monitoring utama 10 FPS.
+\end{enumerate}
+
+\subsection{Subsistem Antarmuka HMI (\textit{Human-Machine Interface})}
+\label{subsec:HMI}
+
+Antarmuka \textit{Control Room} dibangun menggunakan teknologi web modern (\textbf{HTML5 + Vanilla CSS + JavaScript}) dengan desain \textit{Glassmorphism} yang menyerupai panel sistem SCADA industri masa depan.
+Data diperbarui secara \textit{real-time} 10 kali per detik melalui \textbf{Socket.IO} \textit{event streaming}.
+
+\begin{enumerate}
+\item[a.] \textbf{Halaman \textit{Login \& Welcome Screen}:} Autentikasi berbasis \textit{role}: Mode Admin (\texttt{?role=admin}) dengan akses kontrol penuh, dan Mode \textit{Viewer} (\texttt{?role=viewer}) untuk monitoring \textit{read-only}.
+
+\item[b.] \textbf{\textit{Dashboard Overvi}ew:} Grafik transien frekuensi \& kapasitas MW dirender menggunakan \textit{Chart.js} dengan \textit{circular buffer} beresolusi 100 ms, dilengkapi \textit{gauge meter} spidometer empat indikator kunci (Frekuensi, Pembangkitan, Beban Aktual, Defisit).
+
+\item[c.] \textbf{\textit{Single Line Diagram} (SLD) \textit{View}:} Peta topologi jaringan interaktif berbasis \textbf{SVG + DOM CSS}. Jalur hijau = daya mengalir normal; jalur merah = UFLS aktif. Status dibaca dari \textit{feedback coil} \texttt{\%M60--\%M71}.
+
+\item[d.] \textbf{Panel Kontrol Generator:} Kartu status PLTA, PLTS, PLTGU, PLTB beserta daya aktual dari \texttt{\%MW30--\%MW33}. Tombol \textbf{TRIP} mensimulasikan kontingensi secara paksa.
+
+\item[e.] \textbf{Pengaturan Beban \& \textit{Force Override}:} Operator dapat memaksa beban ke nilai MW statis via \textit{event} \texttt{set\_load\_interrupt} yang ditulis ke register \texttt{\%MW40--\%MW51}.
+
+\item[f.] \textbf{Manajemen Prioritas UFLS:} Mengubah bobot $W_i$ secara dinamis (P2 Normal / P3 Esensial / P4 Kritis). Perubahan diperhitungkan ulang MILP dalam 1 siklus iterasi.
+
+\item[g.] \textbf{Matriks Kontingensi N-1:} Tabel prediktif kandidat beban yang dikorbankan per generator. Sel merah = beban \textit{preselection}.
+
+\item[h.] \textbf{Log Alarm \& \textit{History Event}:} \textit{Active Alarm Log} (hilang otomatis saat stabil) dan \textit{History Event Log} permanen untuk keperluan audit SCADA pasca-insiden.
+\end{enumerate}
+
+\section{Parameter Jaringan Listrik Simulasi}
+\label{sec:Parameter_Jaringan}
+
+Seluruh parameter elemen jaringan listrik yang digunakan pada modul simulasi \textit{load flow} (\texttt{loadflow\_module.py}, berbasis \textbf{pandapower}) dan modul fisika dinamik (\texttt{load.py}) didokumentasikan secara rinci sebagai dasar numerik dalam perhitungan aliran daya, profil tegangan busbar, serta dinamika frekuensi sistem. Parameter-parameter tersebut berperan penting dalam memastikan bahwa model simulasi mampu merepresentasikan karakteristik operasional sistem tenaga listrik secara realistis dan konsisten.
+
+\subsection{Parameter Busbar}
+\label{subsec:Parameter_Busbar}
+
+Jaringan simulasi terdiri dari \textbf{tujuh busbar} yang terbagi dalam tiga level tegangan: 66 kV (sisi generator), 150 kV (sub-transmisi), dan 20 kV (distribusi).
+Tabel~\ref{tab:busbar} merangkum spesifikasi setiap busbar.
+
+\begin{longtable}{|c|p{2.8cm}|c|p{4.8cm}|p{3.2cm}|}
+    \caption{Parameter Busbar Jaringan Simulasi}
+    \label{tab:busbar}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{ID} & \textbf{Nama Bus} & \textbf{$V_n$ (kV)} & \textbf{Fungsi} & \textbf{Elemen Terhubung} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{ID} & \textbf{Nama Bus} & \textbf{$V_n$ (kV)} & \textbf{Fungsi} & \textbf{Elemen Terhubung} \\ \hline
+    \endhead
+    B0 & 66kV-1 (GEN 1A, 1B) & 66  & Bus pembangkit kelompok gen.\ 1; \textit{slack bus} ($V_m = 1{,}0$ pu) & PLTA (\texttt{ext\_grid}), PLTS (\texttt{sgen}) \\ \hline
+    B1 & 66kV-2 (GEN 2A, 2B) & 66  & Bus pembangkit kelompok gen.\ 2 & PLTGU (\texttt{gen}), PLTB (\texttt{sgen}) \\ \hline
+    B2 & N1\_SS1              & 150 & Bus sub-transmisi GI-1; sisi HV Trafo 1 & Trafo 1 (HV), Line\_1, Line\_1-1, L101 \\ \hline
+    B3 & N2\_SS2              & 150 & Bus sub-transmisi GI-2; sisi HV Trafo 2 & Trafo 2 (HV), Line\_1, Line\_1-2, L201 \\ \hline
+    B4 & N3\_SS3              & 150 & Bus sub-transmisi GI-3 & Line\_1-1, Line\_2, L301--L305 \\ \hline
+    B5 & N4\_SS4\_150kV       & 150 & Bus sub-transmisi GI-4; sisi HV Trafo 3 & Trafo 3 (HV), Line\_1-2, Line\_2, L401 \\ \hline
+    B6 & N5\_SS4\_20kV        & 20  & Bus distribusi GI-4; sisi LV Trafo 3 & Trafo 3 (LV), L402, L403, L404, L405 \\ \hline
+\end{longtable}
+
+\noindent\textbf{Catatan:} Tegangan referensi (\textit{slack bus}) ditetapkan pada B0 dengan $V_m = 1{.}0$ p.u., merepresentasikan PLTA sebagai unit regulasi tegangan utama (\textit{voltage regulating unit}).
+
+\subsection{Parameter Saluran Sub-Transmisi}
+\label{subsec:Parameter_Saluran}
+
+Jaringan sub-transmisi menggunakan topologi \textbf{\textit{mesh} parsial} (ring terbuka) dengan empat saluran 150 kV.
+Seluruh saluran memiliki panjang homogen 20 km dan menggunakan parameter impedansi yang seragam.
+Tabel~\ref{tab:saluran} menunjukkan parameter tiap saluran.
+
+\begin{longtable}{|l|p{2.4cm}|p{2.4cm}|c|c|c|c|c|c|}
+    \caption{Parameter Saluran Sub-Transmisi 150 kV}
+    \label{tab:saluran}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Saluran} & \textbf{Bus Asal} & \textbf{Bus Tujuan} &
+    \textbf{$l$} & \textbf{$R$} & \textbf{$X$} & \textbf{$C$} &
+    \textbf{$I_{\max}$} & \textbf{Rating} \\ 
+     & & & \textbf{(km)} & \textbf{($\Omega$/km)} & \textbf{($\Omega$/km)} & \textbf{(nF/km)} &
+    \textbf{(kA)} & \textbf{(MVA)} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Saluran} & \textbf{Bus Asal} & \textbf{Bus Tujuan} &
+    \textbf{$l$} & \textbf{$R$} & \textbf{$X$} & \textbf{$C$} &
+    \textbf{$I_{\max}$} & \textbf{Rating} \\ 
+     & & & \textbf{(km)} & \textbf{($\Omega$/km)} & \textbf{($\Omega$/km)} & \textbf{(nF/km)} &
+    \textbf{(kA)} & \textbf{(MVA)} \\ \hline
+    \endhead
+    Line\_1   & N1\_SS1 (B2) & N2\_SS2 (B3) & 20 & 0.10 & 0.40 & 10.0 & \textbf{0.20} & $\approx$52 \\ \hline
+    Line\_1-1 & N1\_SS1 (B2) & N3\_SS3 (B4) & 20 & 0.10 & 0.40 & 10.0 & \textbf{0.30} & $\approx$78 \\ \hline
+    Line\_1-2 & N2\_SS2 (B3) & N4\_SS4 (B5) & 20 & 0.10 & 0.40 & 10.0 & \textbf{0.30} & $\approx$78 \\ \hline
+    Line\_2   & N3\_SS3 (B4) & N4\_SS4 (B5) & 20 & 0.10 & 0.40 & 10.0 & \textbf{0.20} & $\approx$52 \\ \hline
+\end{longtable}
+
+\noindent\textbf{Keterangan:} $R$ = resistansi positif-sekuens; $X$ = reaktansi positif-sekuens; $C$ = kapasitansi saluran.
+Impedansi total setiap saluran: $Z = (0{.}10 + j\,0{.}40) \times 20 = (2{.}0 + j\,8{.}0)\;\Omega$.
+Rasio $X/R = 4{.}0$ merupakan karakteristik tipikal saluran transmisi tegangan tinggi. Pemilihan parameter $R=0{.}10\,\Omega$/km dan $X=0{.}40\,\Omega$/km pada simulasi ini secara presisi mengacu pada spesifikasi nyata konduktor udara tipe ACSR \textit{Hawk} (ukuran 240/40 mm$^2$) yang merupakan standar utilitas untuk jaringan 150 kV PLN.
+Rating MVA: $S = \sqrt{3}\,V_{LL}\,I_{\max} = \sqrt{3} \times 150\;\text{kV} \times I_{\max}$.
+
+\subsection{Parameter Transformator}
+\label{subsec:Parameter_Trafo}
+
+Terdapat \textbf{tiga unit transformator} yang menghubungkan level tegangan dalam sistem.
+Seluruh trafo menggunakan parameter impedansi yang seragam dengan perbedaan pada kapasitas MVA sesuai peruntukannya.
+Tabel~\ref{tab:trafo} merinci parameter setiap trafo.
+
+\begin{longtable}{|l|p{2.7cm}|p{2.6cm}|c|c|c|c|c|c|c|}
+    \caption{Parameter Transformator Daya}
+    \label{tab:trafo}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Nama} & \textbf{Sisi HV} & \textbf{Sisi LV} &
+    $S_n$ & $V_{n,HV}$ & $V_{n,LV}$ & $v_k$ & $v_{kr}$ & $P_{fe}$ & $i_0$ \\
+     & & & \textbf{(MVA)} & \textbf{(kV)} & \textbf{(kV)} &
+    \textbf{(\%)} & \textbf{(\%)} & \textbf{(kW)} & \textbf{(\%)} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Nama} & \textbf{Sisi HV} & \textbf{Sisi LV} &
+    $S_n$ & $V_{n,HV}$ & $V_{n,LV}$ & $v_k$ & $v_{kr}$ & $P_{fe}$ & $i_0$ \\
+     & & & \textbf{(MVA)} & \textbf{(kV)} & \textbf{(kV)} &
+    \textbf{(\%)} & \textbf{(\%)} & \textbf{(kW)} & \textbf{(\%)} \\ \hline
+    \endhead
+    Trafo 1 & N1\_SS1 (150 kV) & 66kV-1          & \textbf{125} & 150 & 66 & 10.0 & 0.3 & 50 & 0.1 \\ \hline
+    Trafo 2 & N2\_SS2 (150 kV) & 66kV-2          & \textbf{125} & 150 & 66 & 10.0 & 0.3 & 50 & 0.1 \\ \hline
+    Trafo 3 & N4\_SS4 (150 kV) & N5\_SS4 (20 kV) & \textbf{100} & 150 & 20 & 10.0 & 0.3 & 50 & 0.1 \\ \hline
+\end{longtable}
+
+\noindent\textbf{Keterangan parameter:}
+$v_k$ = tegangan hubung-singkat (\%); $v_{kr}$ = komponen resistif $v_k$; $P_{fe}$ = rugi-rugi besi inti (kW); $i_0$ = arus magnetisasi tanpa beban (\%).
+Reaktansi bocor: $X_T \approx (v_k/100) \cdot V_n^2/S_n$.
+
+\noindent\textbf{Catatan Perancangan:} Kapasitas Trafo 1 dan Trafo 2 ditetapkan pada \textbf{125 MVA} (melebihi kapasitas satu generator 75 MW) untuk mengakomodasi aliran daya dari dua generator yang beroperasi bersamaan pada bus yang sama, termasuk \textit{spinning reserve} dan margin kontingensi.
+
+\subsection{Parameter Generator}
+\label{subsec:Parameter_Generator}
+
+Empat unit pembangkit disimulasikan dalam dua modul yang saling melengkapi:
+parameter \textbf{statis} (pandapower, untuk perhitungan \textit{load flow}) dan parameter \textbf{dinamis} (\texttt{load.py}, untuk simulasi frekuensi transien).
+
+\begin{enumerate} 
+\item[a.] \textbf{Parameter Statis Generator (\textit{Load Flow} -- pandapower)}
+
+Tabel~\ref{tab:gen_statis} menyajikan parameter statis generator yang digunakan dalam simulasi \textit{load flow} berbasis pandapower sebagai kondisi awal perhitungan aliran daya dan evaluasi kondisi operasi tunak sistem.
+
+\begin{longtable}{|l|p{3.0cm}|p{2.4cm}|c|c|p{5.0cm}|}
+    \caption{Parameter Statis Generator dalam Simulasi \textit{Load Flow} (pandapower)}
+    \label{tab:gen_statis}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Gen.} & \textbf{Tipe Elemen} & \textbf{Bus} &
+    \textbf{$P_{\mathrm{set}}$ (MW)} & \textbf{$V_m$ (pu)} & \textbf{Peran dalam Load Flow} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Gen.} & \textbf{Tipe Elemen} & \textbf{Bus} &
+    \textbf{$P_{\mathrm{set}}$ (MW)} & \textbf{$V_m$ (pu)} & \textbf{Peran dalam Load Flow} \\ \hline
+    \endhead
+    PLTA  & \texttt{ext\_grid} (Slack) & 66kV-1 (B0) & Otomatis & 1.0 &
+        Bus referensi tegangan dan sudut; menyuplai sisa daya aktif dan semua daya reaktif yang dibutuhkan jaringan \\ \hline
+    PLTS  & \texttt{sgen} (Static Gen) & 66kV-1 (B0) & 25.0 & --- &
+        Injeksi daya aktif tetap (model inverter PV/BESS); tidak mengatur tegangan \\ \hline
+    PLTGU & \texttt{gen} (V-Controlled) & 66kV-2 (B1) & 75.0 & 1.0 &
+        Generator PV bus; mempertahankan tegangan 1.0 p.u. dengan mengatur injeksi daya reaktif \\ \hline
+    PLTB  & \texttt{sgen} (Static Gen) & 66kV-2 (B1) & 25.0 & --- &
+        Injeksi daya aktif tetap (model konverter angin DFIG); tidak mengatur tegangan \\ \hline
+\end{longtable}
+
+\item[b.] \textbf{Parameter Dinamis Generator (Simulasi Frekuensi -- \texttt{load.py})}
+
+Tabel~\ref{tab:gen_dinamis} menunjukkan parameter karakteristik fisik tiap generator yang digunakan dalam Persamaan Ayunan dan \textit{Governor Droop Control}.
+
+\begin{longtable}{|p{4.8cm}|c|c|c|c|}
+    \caption{Parameter Dinamis Generator untuk Simulasi Frekuensi Transien}
+    \label{tab:gen_dinamis}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Parameter} & \textbf{PLTA} & \textbf{PLTS} & \textbf{PLTGU} & \textbf{PLTB} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Parameter} & \textbf{PLTA} & \textbf{PLTS} & \textbf{PLTGU} & \textbf{PLTB} \\ \hline
+    \endhead
+    Tipe                                & \textit{Hydro}        & \textit{Solar + BESS} & Gas (CCGT)   & \textit{Wind} (DFIG)  \\ \hline
+    $P_{\mathrm{rated}}$ (MW)           & 75           & 25           & 75           & 25           \\ \hline
+    $P_{\min}$ (MW)                     & 5            & 0            & 15           & 0            \\ \hline
+    Konstanta Inersia $H$ (s)           & \textbf{5.0} & \textbf{0.5} & \textbf{4.0} & \textbf{1.0} \\ \hline
+    \textit{Droop Setting} $R$                   & 5\% (0.05)   & 2\% (0.02)   & 4\% (0.04)   & 4\% (0.04)   \\ \hline
+    \textit{Ramp Rate} (MW/s)                    & 5            & 5            & 3            & 2            \\ \hline
+    \textit{Multiplier Ramp} (Inverter)          & $\times 2$   & $\times 4$   & $\times 2$   & $\times 4$   \\ \hline
+    Alamat Modbus \textit{Output}                & \%MW30       & \%MW31       & \%MW32       & \%MW33       \\ \hline
+    \textit{Coil Status} (\textit{Online})       & \%M10        & \%M11        & \%M12        & \%M13        \\ \hline
+    \textit{Coil Trip} (\textit{Command})        & \%M50        & \%M51        & \%M52        & \%M53        \\ \hline
+\end{longtable}
+
+\noindent\textbf{Keterangan parameter dinamis:}
+\begin{itemize}
+    \item[i.] \textbf{Konstanta Inersia $H$ (detik):} Merepresentasikan energi kinetik tersimpan di rotor dibagi kapasitas nominal. PLTA ($H = 5{.}0$ s) memiliki inersia tertinggi karena massa rotor turbin air yang besar, sedangkan PLTS ($H = 0{.}5$ s) hanya mengandalkan \textit{virtual inertia} konverter BESS. Nilai $H$ yang digunakan pada simulasi ini berada di dalam rentang tipikal operasi generator aktual berdasarkan referensi standar stabilitas sistem tenaga \cite{Kundur1994}.
+    \item[ii.] \textbf{\textit{Droop Setting} $R$:} PLTS menggunakan \textit{droop} 2\% (lebih agresif) karena kemampuan respon cepat BESS.
+    \item[iii.] \textbf{\textit{Ramp Rate} (MW/s):} PLTB memiliki \textit{ramp rate} terendah (2 MW/s) karena keterbatasan mekanis turbin angin.
+\end{itemize}
+
+\item[c.] \textbf{Parameter Sistem Kelistrikan Global}
+
+Tabel~\ref{tab:global} menyajikan parameter sistem kelistrikan global yang digunakan sebagai nilai acuan dalam proses simulasi dan analisis kinerja sistem secara keseluruhan.
+
+\begin{longtable}{|p{6.5cm}|c|p{5.5cm}|}
+    \caption{Parameter Sistem Kelistrikan Global}
+    \label{tab:global}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Parameter} & \textbf{Nilai} & \textbf{Keterangan} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Parameter} & \textbf{Nilai} & \textbf{Keterangan} \\ \hline
+    \endhead
+    Kapasitas Terpasang $S_{\mathrm{Base}}$ & 200 MVA         & PLTA 75 + PLTS 25 + PLTGU 75 + PLTB 25 \\ \hline
+    Frekuensi Nominal $f_{\mathrm{nom}}$    & 50.0 Hz         & Standar sistem kelistrikan Indonesia \\ \hline
+    \textit{Load Damping Factor} $D$                 & 1.5             & Konstanta redaman beban natural (motor industri) \\ \hline
+    Resolusi Komputasi $\Delta t$           & 0.1 s           & Interval integrasi Euler (10 FPS) \\ \hline
+    Batas Frekuensi Simulasi                & 45.0 - 55.0 Hz   & \textit{Clamp} operasional; di luar \textit{range} = \textit{blackout} \\ \hline
+    \textit{Threshold UFLS Trigger}                  & $\leq 49{.}0$ Hz & Batas frekuensi pemicu algoritma MILP \\ \hline
+    \textit{Threshol}d Restorasi                     & 49.95 - 50.10 Hz & Rentang frekuensi aman untuk pemulihan beban \\ \hline
+\end{longtable}
+\end{enumerate}
+
+\subsection{Parameter Beban}
+\label{subsec:Parameter_Beban}
+
+Dua belas titik beban didistribusikan ke empat busbar 150 kV dan satu busbar 20 kV.
+Setiap beban memiliki daya puncak yang berbeda dan level prioritas UFLS yang menentukan urutan pengorbanan dalam algoritma MILP, sebagaimana ditunjukkan pada Tabel~\ref{tab:beban}.
+
+\begin{longtable}{|l|p{2.8cm}|c|c|c|c|l|}
+    \caption{Parameter Beban dan Prioritas UFLS}
+    \label{tab:beban}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Nama} & \textbf{Bus Koneksi} & \textbf{$V_n$ (kV)} &
+    \textbf{$P_{\max}$ (MW)} & \textbf{Prioritas} &
+    \textbf{Bobot $W_i$} & \textbf{Kategori} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Nama} & \textbf{Bus Koneksi} & \textbf{$V_n$ (kV)} &
+    \textbf{$P_{\max}$ (MW)} & \textbf{Prioritas} &
+    \textbf{Bobot $W_i$} & \textbf{Kategori} \\ \hline
+    \endhead
+    L101  & N1\_SS1 (B2) & 150 & 20 & 2 & 1   & Non-Esensial \\ \hline
+    L201  & N2\_SS2 (B3) & 150 & 20 & 2 & 1   & Non-Esensial \\ \hline
+    L303  & N3\_SS3 (B4) & 150 & 15 & 2 & 1   & Non-Esensial \\ \hline
+    L304  & N3\_SS3 (B4) & 150 & 20 & 2 & 1   & Non-Esensial \\ \hline
+    L305  & N3\_SS3 (B4) & 150 & 30 & 2 & 1   & Non-Esensial \\ \hline
+    L401  & N4\_SS4 (B5) & 150 & 30 & 2 & 1   & Non-Esensial \\ \hline
+    L301  & N3\_SS3 (B4) & 150 & 5  & 3 & 10  & Esensial \\ \hline
+    L302  & N3\_SS3 (B4) & 150 & 10 & 3 & 10  & Esensial \\ \hline
+    L402  & N5\_SS4 (B6) & 20  & 5  & 3 & 10  & Esensial \\ \hline
+    L403  & N5\_SS4 (B6) & 20  & 10 & 4 & 100 & Kritis/VIP \\ \hline
+    L404  & N5\_SS4 (B6) & 20  & 15 & 4 & 100 & Kritis/VIP \\ \hline
+    L405  & N5\_SS4 (B6) & 20  & 20 & 4 & 100 & Kritis/VIP \\ \hline
+    \textbf{Total} & --- & --- & \textbf{180} & --- & --- & --- \\ \hline
+\end{longtable}
+
+Nilai aktual beban mengikuti profil fluktuasi harian sinusoidal berdasarkan data WBP/LWBP Indonesia.
+Tabel~\ref{tab:profil_beban} menampilkan faktor beban pada beberapa titik waktu kunci.
+
+\begin{longtable}{|c|c|l|}
+    \caption{Profil Beban Harian WBP/LWBP}
+    \label{tab:profil_beban}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Jam} & \textbf{Faktor Beban} & \textbf{Kondisi} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Jam} & \textbf{Faktor Beban} & \textbf{Kondisi} \\ \hline
+    \endhead
+    00:00 & 0.41          & LWBP -- dini hari rendah \\ \hline
+    04:00 & 0.32          & LWBP -- terendah \\ \hline
+    06:00 & 0.59          & Pagi -- mulai naik \\ \hline
+    09:00 & 0.72          & Pagi -- bisnis aktif \\ \hline
+    12:00 & 0.77          & Siang -- puncak bisnis \\ \hline
+    17:00 & 0.81          & Sore -- mulai WBP \\ \hline
+    19:00 & \textbf{0.90} & \textbf{WBP -- puncak tertinggi} \\ \hline
+    21:00 & 0.77          & Malam -- mulai turun \\ \hline
+    23:00 & 0.54          & Larut malam \\ \hline
+\end{longtable}
+
+\noindent Dengan faktor beban rata-rata 0.72 (jam siang), total beban $= 180 \times 0{.}72 \approx 130$ MW, masih dalam kapasitas 200 MW.
+Margin \textit{spinning reserve} $\approx 70$ MW pada kondisi semua generator \textit{online}.
+
+\section{Topologi Jaringan Listrik yang Disimulasikan}
+\label{sec:Topologi_Jaringan}
+
+Sistem mensimulasikan jaringan sub-transmisi listrik bertopologi \textit{mesh} dengan empat bus utama yang terhubung ke 12 titik beban sebagaimana ditunjukkan pada Gambar~\ref{fig:topologi_jaringan}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_8_2.png}
+    \caption{Topologi Jaringan Listrik yang Disimulasikan (P2 = Non-Esensial, P3 = Esensial, P4 = Kritis/VIP)}
+    \label{fig:topologi_jaringan}
+\end{figure}
+
+\section{Perancangan Alur Kerja Sistem (\textit{Workflow})}
+\label{sec:Alur_Kerja}
+
+Perancangan \textit{workflow} sistem menetapkan urutan logika eksekusi dan pola interaksi data antar lapisan secara kronologis untuk berbagai kondisi operasi jaringan. Rancangan ini bertujuan memastikan koordinasi antara \textit{Physics Engine}, PLC, dan SCADA Master berlangsung secara sinkron, deterministik, dan responsif dalam kegiatan pemantauan maupun pengamanan sistem tenaga listrik. Secara umum, operasi \textit{Digital Twin} dibedakan menjadi dua kondisi utama, yaitu kondisi tunak (\textit{steady state}) yang berfokus pada pemantauan berkala serta kondisi darurat (kontingensi) yang terjadi akibat defisit daya dan memerlukan tindakan pelepasan beban otomatis beserta proses pemulihan bertahap. Tahapan eksekusi pada masing-masing kondisi dirancang untuk mendukung pengambilan keputusan yang cepat, terkoordinasi, dan andal.
+
+\subsection{Alur Normal (\textit{Steady State})}
+
+Pada kondisi normal, seluruh komponen bekerja dalam siklus sinkron 10 Hz sebagai berikut:
+\begin{enumerate}
+    \item \texttt{load.py} menghitung fisika (\textit{Swing Equation + Droop}) dan menulis hasil ke PLC: daya beban (\%MW0--\%MW11), daya generator (\%MW30--\%MW33), frekuensi $\times 100$ (\%MW54).
+    \item \texttt{app.py} melakukan \textit{polling} Modbus setiap 100 ms: membaca semua sensor, mengevaluasi kondisi frekuensi ($f > 49{.}0$ Hz: tidak ada \textit{shedding}), dan menghitung N-1 \textit{Contingency Matrix} di \textit{background}.
+    \item Hasil \textit{polling} disiarkan ke \textit{Browser} HMI via Socket.IO (\textit{event} \texttt{grid\_update}).
+    \item Browser HMI merender grafik transien, \textit{gauge meter}, SLD, dan log secara \textit{real-time}.
+\end{enumerate}
+
+\subsection{Alur Kontingensi (\textit{Under-Frequency Load Shedding})}
+
+Pada kondisi kontingensi, sistem beroperasi dalam mode respons darurat untuk mendeteksi gangguan, menghitung kebutuhan pelepasan beban, mengeksekusi keputusan kendali, dan melakukan pemulihan beban secara bertahap setelah kestabilan sistem berhasil dipulihkan.
+
+\begin{enumerate}
+    \item \textbf{Kejadian:} Operator mengirimkan perintah \textit{trip} generator besar (misal: PLTGU 75 MW) via panel HMI. SCADA menulis \%M52 = 1 ke PLC. \textit{Physics Engine} mendeteksi generator \textit{offline} dan terjadi defisit daya. RoCoF negatif menyebabkan frekuensi turun.
+
+    \item \textbf{\textit{Trigger} UFLS:} Ketika $f \leq 49{.}0$ Hz, SCADA mengaktifkan \textit{solver} MILP.
+    Formulasi optimasi:
+    \begin{itemize}
+        \item[a.] Variabel: $x_i \in \{0,1\}$ untuk semua beban aktif
+        \item[b.] Kendala: $\sum (1-x_i) \cdot P_i \geq P_{\mathrm{Defisit}}$
+        \item[c.] Objektif: $\min \sum (1-x_i) \cdot P_i \cdot W_i$
+    \end{itemize}
+    \textit{Solver} CBC menentukan set beban optimal yang dipadamkan dalam waktu $< 100$ ms.
+
+    \item \textbf{Eksekusi Pemutusan:} SCADA menulis perintah \textit{trip} ke koil \%M21--\%M32. PLC memutus sirkuit beban secara instan. \textit{Physics Engine} membaca \textit{feedback}, mengurangi beban dari perhitungan fisika. Defisit berkurang sehingga RoCoF berbalik positif.
+
+    \item \textbf{Pemulihan Frekuensi:} \textit{Governor Droop} menaikkan daya mekanis generator. AGC mendorong frekuensi kembali menuju 50.0 Hz.
+
+    \item \textbf{Restorasi Beban:} Setelah frekuensi stabil di 49.95 - 50.10 Hz selama 10 siklus berturut-turut dan cadangan daya mencukupi (\textit{spinning reserve} $>$ $P_{\max}$ beban), SCADA memulihkan beban satu per satu secara bertahap.
+\end{enumerate}
+
+\section{Perancangan \textit{Deployment} \& Infrastruktur}
+\label{sec:Deployment}
+
+Sistem dirancang untuk mendukung empat skenario \textit{deployment} sebagaimana ditunjukkan pada Tabel~\ref{tab:deployment}.
+
+\begin{longtable}{|p{3.2cm}|p{3.0cm}|p{7.0cm}|}
+    \caption{Skenario \textit{Deployment} Sistem}
+    \label{tab:deployment}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Skenario} & \textbf{Metode} & \textbf{Keterangan} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Skenario} & \textbf{Metode} & \textbf{Keterangan} \\ \hline
+    \endhead
+    \textit{Production}     & Docker \textit{Compose}  &
+        Satu perintah \texttt{docker-compose up -d --build}; semua layanan terotomasi dalam kontainer terisolasi \\ \hline
+    \textit{Development}    & Manual Python   &
+        Jalankan \texttt{load.py} dan \texttt{app.py} secara terpisah di dua terminal untuk \textit{debugging} \\ \hline
+    LAN/WiFi       & Flask 0.0.0.0   &
+        Server Flask mengikat ke semua antarmuka jaringan; \textit{Control Room} dapat diakses dari perangkat lain di jaringan yang sama \\ \hline
+    Internet Publik & Ngrok \textit{Tunneling} &
+        Terowongan aman ke \textit{localhost} \textit{port} 5000 untuk demonstrasi jarak jauh tanpa konfigurasi \textit{server cloud} \\ \hline
+\end{longtable}
+
+Sistem menggunakan dua layanan Docker yang saling bergantung. Layanan \texttt{scada\_master} (Flask + Socket.IO + MILP) berjalan di \textit{port} 5000 dan bergantung pada layanan \texttt{physics\_engine} yang dikonfigurasi dengan variabel lingkungan \texttt{PLC\_IP: host.docker.internal} untuk mengarahkan koneksi ke Virtual PLC yang berjalan di \textit{host} Windows.
+
+Antarmuka akses sistem tersedia di dua \textit{endpoint}: \texttt{http://[IP]:5000/?role=admin} untuk \textit{Control Room} mode Administrator, dan \texttt{http://[IP]:5000/?role=viewer} untuk mode \textit{Viewer} (monitoring saja).
+
+\section{Ringkasan Komponen Teknologi}
+\label{sec:Ringkasan_Teknologi}
+
+Tabel~\ref{tab:teknologi} merangkum seluruh komponen teknologi yang digunakan dalam implementasi sistem.
+
+\begin{longtable}{|p{3.2cm}|p{5.2cm}|p{5.0cm}|}
+    \caption{Ringkasan Komponen Teknologi yang Digunakan}
+    \label{tab:teknologi}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{Komponen} & \textbf{Teknologi} & \textbf{Versi / Spesifikasi} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{Komponen} & \textbf{Teknologi} & \textbf{Versi / Spesifikasi} \\ \hline
+    \endhead
+    
+   \textit{Physics Engine}    & Python                               & 3.x, \texttt{pymodbus} \textit{library} \\ \hline
+    SCADA \textit{Backend}     & Python + Flask + Socket.IO           & Flask 2.x, \texttt{flask-socketio} \\ \hline
+    MILP \textit{Solver}       & PuLP + CBC                           & \texttt{pulp} \textit{library}, \texttt{PULP\_CBC\_CMD} \\ \hline
+    \textit{Load Flow Module}  & pandapower                           & Newton-Raphson AC, \texttt{loadflow\_module.py} \\ \hline
+    Virtual PLC       & Schneider EcoStruxure Machine Expert -- Basic & Modicon M221 \texttt{TM221ME16R/G} \\ \hline
+    Protokol Industri & Modbus TCP/IP                        & \textit{Port} 502, \textit{Holding Registers} \& \textit{Coils} \\ \hline
+    \textit{Frontend} HMI      & HTML5 + Vanilla CSS + JavaScript     & \textit{Glassmorphism Design}, Chart.js, SVG \\ \hline
+    Komunikasi RT     & Socket.IO                            & WebSocket, \textit{event streaming} 10 FPS \\ \hline
+    \textit{Containerization}  & Docker \& Docker Compose             & \texttt{docker-compose.yml} \\ \hline
+    \textit{Tunneling}         & Ngrok (Opsional)                     & \textit{Port forwarding} ke \textit{port} 5000 \\ \hline
+\end{longtable}

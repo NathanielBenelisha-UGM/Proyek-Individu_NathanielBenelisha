@@ -1,0 +1,881 @@
+% =========================================================
+% PENJELASAN DETAIL: Unit Commitment dengan Virtual Inertia
+% Author  : Nathaniel Benelisha (UGM)
+% Version : v1.0 - September 2026
+% Berdasarkan: Coba_16_20260612_R00_vinertia_cplexdirect.ipynb
+%              main.tex, draft_paper.md, dan Referensi/
+% =========================================================
+
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{array}
+
+\lstdefinestyle{pycode}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  numbers=left,
+  numbersep=5pt,
+  frame=single,
+  breaklines=true,
+  captionpos=b,
+  showstringspaces=false,
+  tabsize=4
+}
+
+\newcommand{\Hsys}{H_{\mathrm{sys}}}
+\newcommand{\Ploss}{\Delta P_{\mathrm{loss}}}
+\newcommand{\RoCoF}{\mathrm{RoCoF}}
+\newcommand{\HVIBESS}{H_{\mathrm{VI,BESS}}}
+\newcommand{\HVIWT}{H_{\mathrm{VI,WT}}}
+\newcommand{\HVIPV}{H_{\mathrm{VI,PV}}}
+
+\begin{document}
+
+\title{Penjelasan Detail: Unit Commitment dengan Virtual Inertia\\
+dari Sumber Daya Berbasis Inverter (IBR)\\
+--- Implementasi dan Teori ---}
+
+\author{Nathaniel~Benelisha,~Universitas~Gadjah~Mada\\
+\texttt{nathanielbenelisha@mail.ugm.ac.id}}
+
+\maketitle
+
+\begin{abstract}
+Dokumen ini menyajikan penjelasan menyeluruh mengenai formulasi
+\textit{Frequency-Constrained Unit Commitment} (FCUC) yang
+mempertimbangkan kontribusi \textit{virtual inertia} (VI)
+dari berbagai sumber daya berbasis inverter (IBR), meliputi
+BESS (\textit{Battery Energy Storage System}), turbin angin (WT),
+dan solar PV. Penjelasan mencakup: (1) landasan fisik inersia sistem
+dan respons frekuensi pasca-gangguan; (2) model matematis setiap
+komponen VI; (3) formulasi lengkap MILP FCUC; dan (4) korespondensi
+formulasi matematis dengan implementasi Python/Pyomo pada
+\texttt{Coba\_16\_20260612\_R00\_vinertia\_cplexdirect.ipynb}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Virtual Inertia, FCUC, IBR, BESS, Wind Turbine, Solar PV,
+RoCoF, Frequency Nadir, MILP, Pyomo, CPLEX.
+\end{IEEEkeywords}
+
+%-----------------------------------------------------------
+\section{Pendahuluan dan Motivasi}
+\label{sec:intro}
+%-----------------------------------------------------------
+
+\subsection{Masalah Inersia dalam Sistem Tenaga Modern}
+
+Sistem tenaga listrik konvensional mengandalkan inersia
+rotasional dari generator sinkron (SG) sebagai mekanisme
+alami untuk menahan laju perubahan frekuensi
+(\textit{Rate of Change of Frequency}, RoCoF) setelah
+terjadi gangguan kehilangan unit pembangkit (kontigensi N-1).
+
+Secara fisik, inersia rotasional dimodelkan melalui
+\textit{swing equation}:
+\begin{equation}
+  2H_i \frac{d\Delta f}{dt} = \frac{P_m - P_e}{S_i}
+  \label{eq:swing_basic}
+\end{equation}
+di mana $H_i$ [MWs/MVA] adalah konstanta inersia unit $i$,
+$P_m$ daya mekanik, $P_e$ daya listrik, dan $S_i$ kapasitas
+terpasang. Untuk sistem agregat dengan $N_g$ generator:
+\begin{equation}
+  2\Hsys \frac{d\Delta f}{dt} =
+    -\Ploss + \Delta P_{\mathrm{gov}}(t)
+    + \Delta P_{\mathrm{VI}}(t) - D\,\Delta f(t)
+  \label{eq:swing_sys}
+\end{equation}
+di mana $\Hsys$ adalah inersia sistem total [MWs/MVA],
+$\Ploss$ adalah daya yang hilang, $\Delta P_{\mathrm{gov}}$
+adalah respons governor, $\Delta P_{\mathrm{VI}}$ adalah
+injeksi daya virtual inertia, dan $D$ adalah koefisien
+redaman beban.
+
+\subsection{Dampak Tingginya Penetrasi IBR}
+
+IBR --- termasuk PV, turbin angin, dan BESS --- tidak
+memiliki inersia rotasional secara alami. Akibatnya:
+\begin{itemize}
+  \item \textbf{RoCoF meningkat}: Frekuensi jatuh lebih
+    cepat, berisiko memicu relay proteksi~\cite{Tielens2016}.
+  \item \textbf{Nadir frekuensi lebih dalam}: Titik terendah
+    frekuensi dapat turun di bawah ambang UFLS
+    (49{,}0~Hz untuk sistem Indonesia)~\cite{ESDM2007}.
+  \item \textbf{QSS memburuk}: Frekuensi keadaan tunak
+    setelah respons primer dapat tidak memenuhi
+    persyaratan minimum.
+\end{itemize}
+
+RUPTL PLN 2025--2034 menargetkan 61\% kapasitas dari
+energi terbarukan pada 2034~\cite{PLN2025}, sehingga
+pemodelan inersia virtual menjadi kritis untuk perencanaan
+operasi sistem.
+
+\subsection{Konsep Virtual Inertia}
+
+\textit{Virtual inertia} (VI) adalah kemampuan IBR
+\textbf{meniru} perilaku inersia rotasional melalui
+algoritma kontrol konverter daya:
+\begin{enumerate}
+  \item \textbf{Grid-forming converter (GFM)}: Konverter
+    beroperasi dengan referensi tegangan, merespons
+    $d\Delta f/dt$ dengan memodulasi daya~\cite{Asiedu2025}.
+  \item \textbf{Synthetic inertia loop} pada turbin angin:
+    Energi kinetik rotor diekstraksi sementara menggunakan
+    algoritma dua tahap~\cite{Chu2020}.
+  \item \textbf{Fast power injection} dari BESS: BESS
+    menyuntikkan daya dalam milidetik melalui loop
+    kontrol VI~\cite{Wen2016}.
+\end{enumerate}
+
+%-----------------------------------------------------------
+\section{Pemodelan Komponen Sistem}
+\label{sec:model}
+%-----------------------------------------------------------
+
+\subsection{Generator Sinkron Konvensional}
+
+Biaya bahan bakar unit $i$ pada periode $t$:
+\begin{equation}
+  C_i^{\mathrm{gen}}(P_{i,t}) = a_i P_{i,t}^2 + b_i P_{i,t} + c_i
+  \label{eq:fuel_cost}
+\end{equation}
+Untuk menjaga linieritas MILP, digunakan aproksimasi
+\textit{piecewise linear} (PWL):
+\begin{equation}
+  C_i^{\mathrm{gen}} \approx
+    c_i\,u_{i,t} + \sum_{k=1}^{K} \lambda_{i,k}\,\Delta P_{i,k,t}
+  \label{eq:pwl}
+\end{equation}
+Kontribusi inersia setiap unit thermal yang beroperasi:
+$H_{\mathrm{SG},i} \cdot S_i \cdot u_{i,t}$ [MWs],
+dengan $H_{\mathrm{SG},i}$ tipikal 2--9 MWs/MVA~\cite{Kundur1994}.
+
+\textit{Implementasi (Cell 12):} Parameter $H_{\mathrm{SG},i}$
+disimpan di kolom \texttt{``H''} pada file Excel, dimuat ke
+parameter Pyomo \texttt{model.H[g]}.
+
+\subsection{Model BESS}
+
+Dinamika \textit{State of Charge} (SoC):
+\begin{equation}
+  E_{b,t} = E_{b,t-1}
+    + \eta_c^b \, P_{c,b,t}\,\Delta t
+    - \frac{1}{\eta_d^b} P_{d,b,t}\,\Delta t
+  \label{eq:soc}
+\end{equation}
+di mana $E_{b,t}$ [MWh] adalah energi tersimpan, $\eta_c^b$
+dan $\eta_d^b$ adalah efisiensi, $P_{c,b,t}$ dan $P_{d,b,t}$
+[MW] adalah daya pengisian dan pengosongan.
+
+\begin{lstlisting}[style=pycode,caption={Dinamika SoC BESS (Cell 52)}]
+def battery_soc_rule(m, b, t):
+    pos = T_list.index(t)
+    if pos == 0:
+        return (m.SOC[b, t] == m.SOC_init[b]
+                + m.eta_ch[b]*m.P_charge[b, t]
+                - (1/m.eta_dis[b])*m.P_discharge[b, t])
+    t_prev = T_list[pos - 1]
+    return (m.SOC[b, t] == m.SOC[b, t_prev]
+            + m.eta_ch[b]*m.P_charge[b, t]
+            - (1/m.eta_dis[b])*m.P_discharge[b, t])
+\end{lstlisting}
+
+\subsubsection{Virtual Inertia dari BESS}
+
+BESS menyediakan VI melalui kontrol \textit{grid-forming}:
+\begin{equation}
+  \HVIBESS(t) = K_{\mathrm{VI}}^{\mathrm{BESS}} \cdot P_{\mathrm{VI},b,t}
+  \label{eq:h_bess_vi}
+\end{equation}
+di mana $K_{\mathrm{VI}}^{\mathrm{BESS}}$ [MWs/MW] adalah
+gain inersia virtual. Constraint discharge dengan headroom VI:
+\begin{equation}
+  P_{d,b,t} + \frac{P_{\mathrm{VI},b,t}}{\eta_{\mathrm{VI}}^b}
+    \leq P_{d,b}^{\max} \cdot \delta_{d,b,t}
+  \label{eq:bess_dis_vi}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Constraint discharge BESS dengan VI headroom (Cell 52)}]
+def battery_discharge_limit_rule(m, b, t):
+    if CONFIG["con_battery_vi"]:
+        return (
+            m.P_discharge[b, t]
+            + m.P_VI_batt[b, t] / m.Eff_VI[b]
+            <= m.DR_max[b] * m.DischargeStatus[b, t]
+        )
+    return (m.P_discharge[b, t]
+            <= m.DR_max[b] * m.DischargeStatus[b, t])
+\end{lstlisting}
+
+\textbf{Catatan:} $P_{\mathrm{VI},b,t}$ adalah cadangan
+yang dijadwalkan (\textit{ex-ante}), bukan injeksi real-time.
+Model memastikan \textit{headroom} tersedia; konverter
+menggunakannya otomatis saat gangguan~\cite{Wen2016}.
+
+\subsection{Model Turbin Angin (WT)}
+
+Inersia sintetis dari turbin angin melalui ekstraksi energi
+kinetik rotor~\cite{Chu2020}:
+\begin{equation}
+  \HVIWT(t) = K_{\mathrm{VI}}^{\mathrm{WT}} \cdot P_{\mathrm{VI,WT},w,t}
+  \label{eq:h_wt_vi}
+\end{equation}
+
+\textbf{Mekanisme fisik:} Rotor turbin memiliki energi
+kinetik $E_k = \frac{1}{2}J\omega^2$. Saat frekuensi turun,
+konverter meningkatkan ekstraksi daya sementara (melebihi
+MPPT), rotor melambat melepas $E_k$ ke grid. Kontrol
+dua-tahap dari~\cite{Chu2020} menangani pemulihan rotor
+untuk menghindari \textit{secondary frequency dip}.
+
+VI dari WT hanya diambil dari porsi yang dikurtail:
+\begin{equation}
+  P_{\mathrm{VI,WT},w,t} \leq P_{\mathrm{Curt,WT},w,t}
+  \label{eq:wt_vi_curtailment}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Constraint VI WT dari curtailment (Cell 55)}]
+if CONFIG["con_wt"] and CONFIG["con_wt_vi"]:
+    def wt_vi_curtailment_rule(m, w, t):
+        return m.P_VI_wt[w, t] <= m.WT_Curt[w, t]
+    model.WTVICurtailmentLimit = Constraint(
+        model.WT, model.T, rule=wt_vi_curtailment_rule)
+\end{lstlisting}
+
+\subsection{Model Solar PV}
+
+VI dari PV melalui \textit{grid-forming inverter} dan
+\textit{deloading}~\cite{Asiedu2025}:
+\begin{equation}
+  \HVIPV(t) = K_{\mathrm{VI}}^{\mathrm{PV}} \cdot P_{\mathrm{VI,PV},t}
+  \label{eq:h_pv_vi}
+\end{equation}
+Dalam kode \texttt{Coba\_16}, VI dari PV dimodelkan
+serupa dengan VI dari WT.
+
+\subsection{Inersia Sistem Total}
+
+\begin{equation}
+  \Hsys(t) =
+    \underbrace{\sum_{i \in \mathcal{G}_{\mathrm{th}}}
+      H_{\mathrm{SG},i}\,S_i\,u_{i,t}}_{\text{Inersia rotasional (SG)}}
+    +
+    \underbrace{K_{\mathrm{VI}}^{\mathrm{BESS}} P_{\mathrm{VI,BESS},t}
+    + K_{\mathrm{VI}}^{\mathrm{WT}} P_{\mathrm{VI,WT},t}}_{\text{Virtual inertia (IBR)}}
+  \label{eq:hsys}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Ekspresi Hsys di Pyomo (Cell 22)}]
+def hsys_rule(m, t):
+    h_thermal = sum(
+        m.H[g] * m.Pmax[g] * m.u[g, t]
+        for g in m.G if Type[g] not in ["PV", "WT"]
+    )
+    h_batt_vi = sum(
+        m.Kb_VI[b] * m.P_VI_batt[b, t] for b in m.BATT
+    ) if CONFIG["con_battery"] and CONFIG["con_battery_vi"] else 0
+    h_wt_vi = sum(
+        m.Kw_VI[w] * m.P_VI_wt[w, t] for w in m.WT
+    ) if CONFIG["con_wt"] and CONFIG["con_wt_vi"] else 0
+    return h_thermal + h_batt_vi + h_wt_vi
+model.Hsys = Expression(model.T, rule=hsys_rule)
+\end{lstlisting}
+
+\textit{Catatan implementasi:} Pada kode, inersia SG
+dihitung sebagai $H[g] \times P_{\max}[g] \times u[g,t]$
+karena data $H[g]$ dinormalisasi terhadap $P_{\max}$
+sebagai \textit{proxy} MVA.
+
+%-----------------------------------------------------------
+\section{Model Respons Frekuensi Sistem}
+\label{sec:sfr}
+%-----------------------------------------------------------
+
+Model SFR mengikuti Anderson dan Mirheydar~\cite{Anderson1990}.
+
+\subsection{Rate of Change of Frequency (RoCoF)}
+
+\begin{equation}
+  \left.\frac{d(\Delta f)}{dt}\right|_{t=0^+}
+    = -\frac{f_0 \cdot \Ploss}{2\,\Hsys(t)\,S_{\mathrm{sys}}}
+  \label{eq:rocof}
+\end{equation}
+Batas RoCoF: $|\RoCoF| \leq \RoCoF^{\max}$ (0{,}5 Hz/s
+tipikal; 0{,}55 Hz/s dalam kode).
+
+\textbf{Justifikasi VI:} Dengan VI aktif sejak $t=0^+$,
+VI meningkatkan $\Hsys$ efektif dan mengurangi RoCoF.
+Inilah mengapa inersia virtual masuk langsung ke $\Hsys$.
+
+\begin{lstlisting}[style=pycode,caption={Estimasi RoCoF (Cell 25)}]
+def rocof_est_rule(m, t):
+    return m.LargestLoss[t] * f0 / (2 * m.Hsys[t])
+model.RoCoF_est = Expression(model.T, rule=rocof_est_rule)
+\end{lstlisting}
+
+\subsection{Nadir Frekuensi (Linearisasi Dua-Tahap)}
+
+Nadir dilinearisasi menggunakan pendekatan dari~\cite{Shi2025}:
+\begin{equation}
+  \Delta f_{\mathrm{nadir},t} \approx
+    \alpha_0 + \alpha_1 \Hsys(t) + \alpha_2 R_{\mathrm{sys},t}
+    + \alpha_3 \Ploss(t)
+  \label{eq:nadir_linear}
+\end{equation}
+Koefisien $\alpha_0,\ldots,\alpha_3$ diperoleh dari regresi
+\textit{least-squares} atas 5000 sampel simulasi SFR.
+
+\subsection{Frekuensi Quasi-Steady-State (QSS)}
+
+\begin{equation}
+  \Delta f_{\mathrm{QSS}} =
+    \frac{f_0 \cdot \Ploss}{D\,S_{\mathrm{sys}} + R_{\mathrm{sys},t}}
+  \label{eq:qss}
+\end{equation}
+di mana $R_{\mathrm{sys},t} = \sum_{i} R_i\,u_{i,t}$
+adalah droop governor agregat [MW/Hz].
+
+\begin{lstlisting}[style=pycode,caption={Estimasi frekuensi QSS (Cell 26)}]
+def qss_freq_rule(m, t):
+    return f0 - (
+        m.LargestLoss[t]
+        / (m.TotalPFR[t] + D_frac * model.Demand[t])
+    )
+model.f_qss = Expression(model.T, rule=qss_freq_rule)
+\end{lstlisting}
+
+%-----------------------------------------------------------
+\section{Formulasi FCUC dengan Virtual Inertia}
+\label{sec:formulation}
+%-----------------------------------------------------------
+
+\subsection{Fungsi Objektif}
+
+\begin{equation}
+  \min \sum_{t=1}^{T} \Bigg[
+    \sum_{i \in \mathcal{G}} \Big(
+      C_i^{\mathrm{gen}}(P_{i,t})
+      + C_i^{\mathrm{SU}} v_{i,t}
+      + C_i^{\mathrm{SD}} w_{i,t}
+      + c_i^{\mathrm{fixed}} u_{i,t}
+    \Big)
+    + c_{\mathrm{deg}}\,(P_{c,t}+P_{d,t})\,\Delta t
+  \Bigg]
+  \label{eq:obj}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Fungsi objektif modular (Cell 28)}]
+def obj_rule(m):
+    total_cost = 0
+    if CONFIG["obj_generation_cost"]:
+        total_cost += sum(m.b[g]*m.P[g,t]
+                         for g in m.G for t in m.T)
+    if CONFIG["obj_fixed_cost"]:
+        total_cost += sum(m.c[g]*m.u[g,t]
+                         for g in m.G for t in m.T)
+    if CONFIG["obj_startup_cost"]:
+        total_cost += sum(m.SU_cost[g]*m.y[g,t]
+                         for g in m.G for t in m.T)
+    if CONFIG["obj_shutdown_cost"]:
+        total_cost += sum(m.SD_cost[g]*m.z[g,t]
+                         for g in m.G for t in m.T)
+    return total_cost
+\end{lstlisting}
+
+\subsection{Constraint UC Standar}
+
+\textbf{Keseimbangan daya (Cell 29):}
+\begin{equation}
+  \sum_{i} P_{i,t} + \sum_{w} P_{\mathrm{WT},w,t}
+  + \sum_{b} (P_{d,b,t} - P_{c,b,t}) = D_t \quad \forall\,t
+  \label{eq:balance}
+\end{equation}
+
+\textbf{Batas kapasitas (Cell 32--33):}
+\begin{align}
+  u_{i,t}\,P_i^{\min} &\leq P_{i,t} \leq u_{i,t}\,P_i^{\max}
+    \quad \forall\,i \in \mathcal{G}_{\mathrm{th}},\,t \label{eq:cap_th}\\
+  0 &\leq P_{\mathrm{WT},w,t} \leq P_{\mathrm{WT},w,t}^{\mathrm{avail}}
+    \quad \forall\,w,\,t \label{eq:cap_wt}
+\end{align}
+
+\textbf{Batas ramp (Cell 38--39):}
+\begin{align}
+  P_{i,t} - P_{i,t-1} &\leq RU_i\,u_{i,t-1} + P_i^{\min}\,v_{i,t}
+    \label{eq:ramp_up}\\
+  P_{i,t-1} - P_{i,t} &\leq RD_i\,u_{i,t} + P_i^{\min}\,w_{i,t}
+    \label{eq:ramp_down}
+\end{align}
+
+\textbf{Waktu nyala/mati minimum (Cell 40--41):}
+\begin{align}
+  \sum_{\tau=t}^{t+UT_i-1} u_{i,\tau} &\geq UT_i \cdot v_{i,t}
+    \label{eq:mut}\\
+  \sum_{\tau=t}^{t+DT_i-1} (1-u_{i,\tau}) &\geq DT_i \cdot w_{i,t}
+    \label{eq:mdt}
+\end{align}
+Implementasi menggunakan formulasi \textit{backward-looking}
+yang menangani kondisi awal dengan benar.
+
+\textbf{Konsistensi logis (Cell 36--37):}
+\begin{align}
+  v_{i,t} - w_{i,t} &= u_{i,t} - u_{i,t-1} \label{eq:logic}\\
+  v_{i,t} + w_{i,t} &\leq 1 \label{eq:non_sim}
+\end{align}
+
+\textbf{N-1 Spinning Reserve (Cell 43):}
+\begin{align}
+  P_{i,t} + R_{i,t} &\leq P_i^{\max}\,u_{i,t}
+    \label{eq:res_headroom}\\
+  \sum_{i \in \mathcal{G}_{\mathrm{th}}} R_{i,t}
+    &\geq \Ploss(t) \label{eq:n1_res}
+\end{align}
+
+\subsection{Constraint BESS}
+
+Selain SoC~\eqref{eq:soc} dan batas daya~\eqref{eq:bess_dis_vi}:
+\begin{align}
+  \delta_{c,b,t} + \delta_{d,b,t} &\leq 1
+    \quad \text{(no simultaneous)} \label{eq:no_sim_cd}\\
+  E_b^{\min} \leq E_{b,t} &\leq E_b^{\max}
+    \label{eq:soc_bounds}\\
+  E_{b,T} &= E_{b,0}
+    \quad \text{(energy neutrality)} \label{eq:energy_neutral}
+\end{align}
+
+\subsection{Constraint Keamanan Frekuensi}
+
+\subsubsection{Kehilangan Daya Terbesar (Cell 23)}
+
+\begin{equation}
+  \Ploss(t) \geq P_{i,t}
+    \quad \forall\,i \in \mathcal{G}_{\mathrm{th}},\,t
+  \label{eq:largest_loss}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Constraint LargestLoss (Cell 23)}]
+def largest_loss_rule(m, g, t):
+    if Type[g] in ["PV", "WT"]:
+        return Constraint.Skip
+    return m.LargestLoss[t] >= m.P[g, t]
+model.LargestLossConstraint = Constraint(
+    model.G, model.T, rule=largest_loss_rule)
+\end{lstlisting}
+
+\subsubsection{Constraint RoCoF (Cell 54 dan 61)}
+
+Dari Persamaan~\eqref{eq:rocof}:
+\begin{equation}
+  \boxed{
+    2\,\RoCoF^{\max}\,\Hsys(t) \geq f_0\,\Ploss(t)
+  }
+  \quad \forall\,t
+  \label{eq:rocof_con}
+\end{equation}
+Constraint ini \textbf{linier} dalam $\Hsys(t)$ yang
+merupakan fungsi linier dari $u_{i,t}$, $P_{\mathrm{VI,BESS},t}$,
+dan $P_{\mathrm{VI,WT},t}$.
+
+\begin{lstlisting}[style=pycode,caption={Constraint RoCoF (Cell 54 dan 61)}]
+# Cell 54: MinInertiaConstraint
+def min_inertia_rule(m, t):
+    return (2*RoCoF_limit*m.Hsys[t] >= f0*m.LargestLoss[t])
+model.MinInertiaConstraint = Constraint(model.T, rule=min_inertia_rule)
+
+# Cell 61: RoCoFLimitConstraint (ekuivalen matematis)
+def rocof_limit_rule(m, t):
+    return (m.LargestLoss[t]*f0 <= 2*RoCoF_limit*m.Hsys[t])
+model.RoCoFLimitConstraint = Constraint(model.T, rule=rocof_limit_rule)
+\end{lstlisting}
+
+\textit{Catatan:} Cell 54 dan 61 mengimplementasikan
+constraint yang matematically identik dari perspektif
+yang berbeda (inersia minimum vs. batas RoCoF).
+Hanya salah satu yang diaktifkan melalui \texttt{CONFIG}.
+
+\subsubsection{Constraint QSS (Cell 62)}
+
+Dari Persamaan~\eqref{eq:qss}:
+\begin{equation}
+  \Ploss(t) \leq
+    (f_0 - f_{\mathrm{QSS}}^{\min})
+    \cdot \Big(D\,S_{\mathrm{sys}} + R_{\mathrm{sys},t}\Big)
+  \label{eq:qss_con}
+\end{equation}
+
+\begin{lstlisting}[style=pycode,caption={Constraint QSS (Cell 62)}]
+def qss_limit_rule(m, t):
+    damping_term = D_frac * Demand[t]
+    return (
+        m.LargestLoss[t]
+        <= (f0 - f_min) * (damping_term + m.TotalPFR[t])
+    )
+model.QSSLimitConstraint = Constraint(model.T, rule=qss_limit_rule)
+\end{lstlisting}
+
+\subsubsection{Constraint Nadir Frekuensi}
+
+Menggunakan linearisasi dari~\cite{Shi2025}:
+\begin{equation}
+  \alpha_0 + \alpha_1 \Hsys(t) + \alpha_2 R_{\mathrm{sys},t}
+  + \alpha_3 \Ploss(t) \leq \Delta f^{\max}
+  \label{eq:nadir_con}
+\end{equation}
+Dalam kode, \texttt{con\_freq\_nadir} tersedia dalam CONFIG
+dan memerlukan prakomputasi koefisien regresi terpisah.
+
+%-----------------------------------------------------------
+\section{Konfigurasi Skenario}
+\label{sec:config}
+%-----------------------------------------------------------
+
+\subsection{Parameter Frekuensi Global (Cell 6)}
+
+\begin{lstlisting}[style=pycode,caption={Parameter frekuensi global}]
+f0 = 50.0         # Frekuensi nominal [Hz]
+f_min = 49.0      # Batas nadir minimum [Hz]
+D_frac = 0.01     # Load damping [%MW/Hz]
+RoCoF_limit = 0.55   # Batas RoCoF [Hz/s]
+f_qss_min = 49.5     # Batas QSS [Hz]
+\end{lstlisting}
+
+\subsection{Flag Konfigurasi Modular}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Flag Konfigurasi dan Fungsinya}
+\label{tab:config}
+\centering\footnotesize
+\begin{tabular}{lp{5.5cm}}
+\toprule
+Flag CONFIG & Fungsi \\ \midrule
+\texttt{con\_battery}        & Aktifkan model BESS \\
+\texttt{con\_battery\_vi}    & Aktifkan VI dari BESS \\
+\texttt{con\_wt}             & Aktifkan model turbin angin \\
+\texttt{con\_wt\_vi}         & Aktifkan VI dari turbin angin \\
+\texttt{con\_min\_inertia}   & Constraint inersia minimum \\
+\texttt{con\_rocof\_limit}   & Constraint batas RoCoF \\
+\texttt{con\_qss\_limit}     & Constraint batas QSS \\
+\texttt{con\_freq\_nadir}    & Constraint nadir (linearisasi) \\
+\texttt{con\_n1\_spinning\_reserve} & N-1 reserve konvensional \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Matriks Skenario}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Matriks Skenario Simulasi}
+\label{tab:scenarios}
+\centering\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+Skenario & IBR & BESS VI & WT VI & Freq. Con. & Deskripsi \\
+\midrule
+S0 & 0\%  & -- & -- & -- & UC Klasik (baseline) \\
+S1 & 0\%  & -- & -- & Ya & FCUC, inersia SG saja \\
+S2 & 40\% & Ya & -- & Ya & FCUC + BESS VI \\
+S3 & 40\% & Ya & Ya & Ya & FCUC + BESS + WT VI \\
+S4 & 40\% & Ya & Ya & Ya & \textbf{Proposed} (multi-VI) \\
+S5 & 60\% & Ya & Ya & Ya & Proposed, 60\% IBR \\
+S6 & 80\% & Ya & Ya & Ya & Proposed, 80\% IBR \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%-----------------------------------------------------------
+\section{Parameter Sistem Uji}
+\label{sec:params}
+%-----------------------------------------------------------
+
+Sistem uji dimodifikasi dari benchmark IEEE 10-unit
+Kazarlis et al.~\cite{Kazarlis1996}:
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Parameter Generator Thermal}
+\label{tab:gen}
+\centering\footnotesize
+\begin{tabular}{cccccccc}
+\toprule
+Unit & $P^{\min}$ & $P^{\max}$ & $b$ & $c$ &
+  $H_{\mathrm{SG}}$ & $UT$ & $DT$ \\
+ & [MW] & [MW] & [\$/MWh] & [\$/h] & [MWs/MVA] & [h] & [h] \\
+\midrule
+G1  & 150 & 455 & 16.19 & 1000 & 5.0 & 8 & 8 \\
+G2  & 150 & 455 & 17.26 &  970 & 5.0 & 8 & 8 \\
+G3  & 20  & 130 & 16.60 &  700 & 4.0 & 5 & 5 \\
+G4  & 20  & 130 & 16.50 &  680 & 4.0 & 5 & 5 \\
+G5  & 25  & 162 & 19.70 &  450 & 3.5 & 6 & 6 \\
+G6  & 20  &  80 & 22.26 &  370 & 3.5 & 3 & 3 \\
+G7  & 25  &  85 & 27.74 &  480 & 3.0 & 3 & 3 \\
+G8  & 10  &  55 & 25.92 &  660 & 2.5 & 1 & 1 \\
+G9  & 10  &  55 & 27.27 &  665 & 2.5 & 1 & 1 \\
+G10 & 10  &  55 & 27.79 &  670 & 2.5 & 1 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Parameter BESS dan IBR}
+\label{tab:ibr}
+\centering\footnotesize
+\begin{tabular}{lrc}
+\toprule
+Parameter & Nilai & Satuan \\ \midrule
+Kapasitas daya BESS & 200 & MW \\
+Kapasitas energi BESS & 400 & MWh \\
+Batas SoC & 10\%--90\% & -- \\
+Efisiensi $\eta_c$, $\eta_d$ & 0.95, 0.95 & -- \\
+Biaya degradasi $c_{\mathrm{deg}}$ & 5.0 & USD/MWh \\
+Gain VI BESS ($K_{\mathrm{VI}}^{\mathrm{BESS}}$) & 10 & MWs/MW \\
+Kapasitas turbin angin & 300 & MW \\
+Gain VI WT ($K_{\mathrm{VI}}^{\mathrm{WT}}$) & 3.5 & MWs/MW \\
+Kapasitas solar PV & 200 & MW \\
+Gain VI PV ($K_{\mathrm{VI}}^{\mathrm{PV}}$) & 2.5 & MWs/MW \\
+$S_{\mathrm{sys}}$ & 3000 & MVA \\
+$D$ (\textit{load damping}) & 1.0 & \%MW/Hz \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Batas Keamanan Frekuensi (sesuai kode)}
+\label{tab:freq}
+\centering\footnotesize
+\begin{tabular}{lrc}
+\toprule
+Parameter & Nilai & Satuan \\ \midrule
+$f_0$ (nominal) & 50.0 & Hz \\
+$\RoCoF^{\max}$ & 0.55 & Hz/s \\
+$f_{\mathrm{nadir}}^{\min}$ & 49.0 & Hz \\
+$f_{\mathrm{QSS}}^{\min}$ & 49.5 & Hz \\
+$\Delta f^{\max}$ & 1.0 & Hz \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%-----------------------------------------------------------
+\section{Peta Cell ke Komponen Matematis}
+\label{sec:flow}
+%-----------------------------------------------------------
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Korespondensi Cell Notebook dengan Persamaan}
+\label{tab:cell_map}
+\centering\footnotesize
+\begin{tabular}{clp{4.8cm}}
+\toprule
+Cell & Komponen & Persamaan / Deskripsi \\
+\midrule
+2  & Import       & Library: Pyomo, Pandas, NumPy \\
+6  & CONFIG       & Skenario dan parameter frekuensi \\
+8  & Data         & Baca Excel: Gen, Demand, Battery, WT \\
+12 & Dictionary   & Konversi DataFrame ke dict \\
+14 & Derived      & RenewPotential, FreqBias \\
+16 & Sets         & model.G, model.T, model.BATT, model.WT \\
+18 & Params       & model.Pmin, Pmax, H, Kb\_VI, Kw\_VI \\
+20 & Variables    & P, u, y, z, R, P\_VI\_batt, P\_VI\_wt \\
+22 & Hsys         & Pers.~\eqref{eq:hsys} \\
+23 & LargestLoss  & Pers.~\eqref{eq:largest_loss} \\
+24 & TotalPFR     & $R_{\mathrm{sys},t}$ \\
+25 & RoCoF\_est   & Pers.~\eqref{eq:rocof} \\
+26 & f\_qss       & Pers.~\eqref{eq:qss} \\
+28 & Objective    & Pers.~\eqref{eq:obj} \\
+29 & Balance      & Pers.~\eqref{eq:balance} \\
+32 & MaxCap       & Pers.~\eqref{eq:cap_th}--\eqref{eq:cap_wt} \\
+33 & MinCap       & Batas minimum kapasitas \\
+36--37 & Transition & Pers.~\eqref{eq:logic}--\eqref{eq:non_sim} \\
+38--39 & Ramp      & Pers.~\eqref{eq:ramp_up}--\eqref{eq:ramp_down} \\
+40--41 & MUT/MDT   & Pers.~\eqref{eq:mut}--\eqref{eq:mdt} \\
+43 & N-1 Reserve  & Pers.~\eqref{eq:res_headroom}--\eqref{eq:n1_res} \\
+52 & Battery      & Pers.~\eqref{eq:soc}--\eqref{eq:energy_neutral} \\
+54 & MinInertia   & Pers.~\eqref{eq:rocof_con} \\
+55 & WT-VI-CL     & Pers.~\eqref{eq:wt_vi_curtailment} \\
+61 & RoCoFLimit   & Pers.~\eqref{eq:rocof_con} (ekuivalen) \\
+62 & QSSLimit     & Pers.~\eqref{eq:qss_con} \\
+64 & Solve        & CPLEX Direct \\
+65--83 & Post-proc  & Tabel dan ringkasan \\
+87--99 & Freq Sim  & Validasi time-domain \\
+101--104 & Plot    & Visualisasi dispatch dan frekuensi \\
+105 & Export       & Output ke Excel \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%-----------------------------------------------------------
+\section{Diskusi: Peran Virtual Inertia dalam FCUC}
+\label{sec:discussion}
+%-----------------------------------------------------------
+
+\subsection{Trade-off Biaya--Keamanan}
+
+Tanpa VI dari IBR, satu-satunya cara memenuhi constraint
+RoCoF~\eqref{eq:rocof_con} adalah mengoperasikan cukup
+banyak unit thermal. Pada penetrasi IBR tinggi ($>60\%$),
+hal ini memaksa unit mahal tetap beroperasi
+(\textit{must-run}).
+
+Dengan VI dari IBR, optimizer dapat mengurangi komitmen
+unit thermal dan menggantinya dengan alokasi VI:
+\begin{equation}
+  \Hsys(t) =
+    \underbrace{\sum_i H_{\mathrm{SG},i} u_{i,t}}_{\text{dapat dikurangi}}
+    + \underbrace{K_{\mathrm{VI}}^{\mathrm{BESS}} P_{\mathrm{VI,BESS}}
+      + K_{\mathrm{VI}}^{\mathrm{WT}} P_{\mathrm{VI,WT}}}_{\text{kompensasi VI}}
+  \geq H_{\mathrm{req}}(t)
+  \label{eq:tradeoff}
+\end{equation}
+
+\subsection{Coupling Variabel dalam MILP}
+
+Constraint VI menciptakan \textit{coupling} antara:
+\begin{itemize}
+  \item Variabel biner $u_{i,t}$ (status unit thermal)
+  \item Variabel kontinyu $P_{\mathrm{VI,BESS},t}$,
+    $P_{\mathrm{VI,WT},t}$ (alokasi VI)
+  \item Variabel kontinyu $P_{d,b,t}$ (dispatch BESS)
+  \item Variabel kontinyu $P_{\mathrm{Curt,WT},w,t}$
+    (curtailment WT untuk cadangan VI)
+\end{itemize}
+
+CPLEX Direct secara simultan mengoptimalkan semua variabel
+ini, menemukan kompromi biaya terbaik antara: (a) menambah
+unit thermal, (b) mengalokasikan VI dari BESS, dan
+(c) mengkurtail WT untuk cadangan VI.
+
+\subsection{Pemetaan Referensi}
+
+\begin{table}[!t]\renewcommand{\arraystretch}{1.2}
+\caption{Pemetaan Konsep ke Referensi}
+\label{tab:refs}
+\centering\footnotesize
+\begin{tabular}{lll}
+\toprule
+Konsep & Referensi Utama & File Lokal \\
+\midrule
+Inersia \& swing eq. & Kundur~\cite{Kundur1994} & -- \\
+Model SFR & Anderson~\cite{Anderson1990} & -- \\
+FCUC + BESS VI & Wen et al.~\cite{Wen2016} & \texttt{[01-005]} \\
+VI dari turbin angin & Chu et al.~\cite{Chu2020} & \texttt{[01-007]} \\
+Linearisasi nadir & Shi et al.~\cite{Shi2025} & \texttt{[01-012]} \\
+Review IBR+FCUC & Asiedu et al.~\cite{Asiedu2025} & \texttt{[B09]} \\
+Sulawesi UC & \cite{Sulawesi2024} & \texttt{[E02]} \\
+JAMALI FFR UC & \cite{JAMALI2025} & \texttt{[E03]} \\
+Benchmark 10-unit & Kazarlis et al.~\cite{Kazarlis1996} & -- \\
+RUPTL 2025--2034 & PLN~\cite{PLN2025} & \texttt{[RUPTL]} \\
+Grid code Indonesia & ESDM~\cite{ESDM2007} & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%-----------------------------------------------------------
+\section{Kesimpulan}
+\label{sec:conclusion}
+%-----------------------------------------------------------
+
+Dokumen ini telah menyajikan:
+\begin{enumerate}
+  \item \textbf{Landasan fisik} virtual inertia dari
+    perspektif swing equation dan model SFR.
+  \item \textbf{Formulasi matematis lengkap} FCUC dengan
+    multi-sumber VI (BESS, turbin angin, solar PV).
+  \item \textbf{Korespondensi satu-ke-satu} antara
+    persamaan matematis dengan implementasi Python/Pyomo
+    dalam notebook \texttt{Coba\_16}.
+  \item \textbf{Justifikasi fisik} mengapa VI dari IBR
+    dapat menggantikan inersia rotasional SG.
+  \item \textbf{Pemetaan referensi} menghubungkan setiap
+    konsep dengan literatur yang relevan.
+\end{enumerate}
+
+Pemodelan ini relevan untuk kondisi sistem tenaga Indonesia,
+di mana RUPTL 2025--2034 menargetkan 61\% kapasitas
+terbarukan. Pendekatan multi-sumber VI memungkinkan
+peningkatan penetrasi IBR sekaligus menjaga keamanan
+frekuensi dengan biaya premium minimal.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{20}
+
+\bibitem{PLN2025}
+PLN, ``RUPTL PLN 2025--2034,'' Jakarta, 2025.
+
+\bibitem{Tielens2016}
+P.~Tielens and D.~Van~Hertem,
+``The relevance of inertia in power systems,''
+\textit{Renew. Sustain. Energy Rev.}, vol.~55,
+pp.~999--1009, 2016.
+
+\bibitem{ESDM2007}
+Peraturan Menteri ESDM No.~3 Tahun 2007:
+Aturan Jaringan Sistem Tenaga Listrik Jawa-Madura-Bali.
+
+\bibitem{Padhy2004}
+N.~Padhy, ``Unit commitment --- a bibliographical survey,''
+\textit{IEEE Trans. Power Syst.}, vol.~19, no.~2,
+pp.~1196--1205, May 2004.
+
+\bibitem{Wen2016}
+Y.~Wen \textit{et al.},
+``Frequency dynamics constrained unit commitment with battery
+energy storage,''
+\textit{IEEE Trans. Power Syst.}, vol.~31, no.~6,
+pp.~5115--5125, Nov. 2016. \textit{[Ref 01-005]}
+
+\bibitem{Chu2020}
+Z.~Chu \textit{et al.},
+``Towards optimal system scheduling with synthetic inertia
+provision from wind turbines,''
+\textit{IEEE Trans. Power Syst.}, vol.~35, no.~5,
+pp.~4056--4066, Sep. 2020. \textit{[Ref 01-007]}
+
+\bibitem{Shi2025}
+Q.~Shi \textit{et al.},
+``Two-stage linearization of frequency nadir constraint
+for unit commitment,''
+\textit{IEEE Trans. Power Syst.}, vol.~40, no.~4,
+pp.~3584--3587, Jul. 2025. \textit{[Ref 01-012]}
+
+\bibitem{Sulawesi2024}
+[Penulis], ``Unit Commitment with Primary Frequency
+Regulation in Southern Sulawesi,''
+\textit{Proc. ICT-PEP}, 2024. \textit{[Ref E02]}
+
+\bibitem{JAMALI2025}
+[Penulis], ``Unit Commitment with 2-Minute FFR Constraint
+in JAMALI,''
+\textit{Proc. ICT-PEP}, 2025. \textit{[Ref E03]}
+
+\bibitem{Kazarlis1996}
+S.~A.~Kazarlis \textit{et al.},
+``A genetic algorithm solution to the unit commitment problem,''
+\textit{IEEE Trans. Power Syst.}, vol.~11, no.~1,
+pp.~83--92, Feb. 1996.
+
+\bibitem{Kundur1994}
+P.~Kundur, \textit{Power System Stability and Control}.
+New York: McGraw-Hill, 1994.
+
+\bibitem{Anderson1990}
+P.~M.~Anderson and M.~Mirheydar,
+``A low-order system frequency response model,''
+\textit{IEEE Trans. Power Syst.}, vol.~5, no.~3,
+pp.~720--729, Aug. 1990.
+
+\bibitem{Asiedu2025}
+S.~T.~Asiedu \textit{et al.},
+``A review of dynamic constraint integration into
+steady-state power system optimization models for
+IBR-dominated systems,''
+\textit{IEEE Access}, vol.~13, 2025. \textit{[Ref B09]}
+
+\end{thebibliography}
+
+\end{document}

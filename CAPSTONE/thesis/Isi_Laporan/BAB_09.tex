@@ -1,0 +1,125 @@
+% \textcolor{black}{Di bagian ini, mahasiswa diharapkan mampu mendesain dan mengalokasikan sumber daya (baik berupa manusia, fasilitas, ataupun anggaran keuangan) untuk mendukung solusi yang telah dipilih. Ini dicapai melalui 2 hal berikut.
+% \begin{itemize}
+%    \item Kemampuan menguraikan solusi yang dipilih ke dalam sub-tugas (\textit{subtasks}). Hal ini didasarkan pada kenyataan bahwa untuk mencapai solusi akhir, tidak mungkin dilakukan sekali jalan. Hal yang biasa dilakukan adalah solusi akhir dipecah menjadi  beberapa sub-tugas yang dapat ditempuh baik secara serial atau paralel.
+%    \item Pembuatan jadwal kegiatan/\textit{time table} (baik berupa \textit{Gantt chart}, \textit{timeline}, dan sejenisnya) maupun alokasi sumberdaya (seperti manusia, fasilitas, ataupun anggaran keuangan) untuk setiap sub-tugas.
+% \end{itemize}
+% Sebagai catatan, alokasi\underline{ sumber daya  manusia dan finansial wajib diberikan}. Alokasi sumber daya manusia mengacu kepada bagaimana tugas atau sub-tugas didistribusikan di antara anggota kelompok, sedangkan alokasi finansial mengacu kepada alokasi biaya yang dibutuhkan untuk menjalankan proyek. Alokasi biaya tidak harus berupa biaya yang benar-benar dikeluarkan mahasiswa. Sebagai contoh jika salah satu yang diperlukan dari solusi anda adalah sebuah sensor yang berharga 100.000.000 rupiah dan anda mendapatkan pinjaman sensor tersebut dari salah satu lab di DTETI, maka anda harus memasukkan harga sensor tersebut ke dalam alokasi biaya anda.
+% }
+
+Manajemen operasional proyek \textit{Capstone} mencakup perencanaan finansial serta penjadwalan seluruh tahapan kegiatan pelaksanaan secara sistematis. Pengelolaan sumber daya dan penyusunan lini masa yang terstruktur menjadi aspek penting untuk memastikan pengembangan sistem \textit{SCADA-Based Optimal Load Shedding and Recovery} dapat berlangsung secara adaptif, tepat waktu, dan sesuai dengan target luaran yang telah disepakati bersama mitra industri. Dalam konteks tersebut, disusun estimasi rincian anggaran biaya untuk realisasi panel fisik \textit{Hardware-in-the-Loop} (HIL), lini masa pelaksanaan kegiatan selama sembilan bulan yang mencakup fase perancangan (C-251) dan fase implementasi (C-501), serta pembagian tanggung jawab teknis pada setiap komponen prototipe.
+
+\section{Rencana Anggaran Pelaksanaan \textit{Capstone}}
+\label{sec:Rencana_Anggaran}
+Rancangan anggaran untuk proyek \textit{Capstone} ini menyesuaikan dengan keperluan membangun sistem \textit{Digital Twin} SCADA beserta integrasi fisik \textit{Hardware-in-the-Loop} (HIL). Pada sistem ini, beban listrik simulasi direpresentasikan menggunakan lampu indikator yang dikendalikan melalui \textit{Miniature Circuit Breaker} (MCB) dan dihubungkan secara fisik ke modul \textit{Programmable Logic Controller} (PLC). 
+
+Seluruh valuasi kebutuhan perancangan dan implementasi proyek dicantumkan secara lengkap pada Tabel~\ref{tab:anggaran} dengan total estimasi mencapai Rp 5.310.000,00. Dari total anggaran tersebut, pendanaan sebesar Rp 1.460.000,00 (dialokasikan untuk pengadaan komponen kelistrikan pendukung, pembuatan \textit{box} panel, dan sewa peladen) didukung secara penuh melalui pendanaan dari pihak Mitra. Sementara itu, sisa valuasi senilai Rp 3.850.000,00 (yang meliputi perangkat keras industri utama seperti PLC Schneider Modicon M221, catu daya 24V, dan modul \textit{relay}) difasilitasi dalam bentuk barang pinjaman inventaris oleh Mitra selama masa pengembangan prototipe berlangsung.
+\begin{longtable}{|c|p{6.5cm}|c|p{2.8cm}|p{3.0cm}|}
+    \caption{Estimasi Anggaran Pelaksanaan Kegiatan \textit{Capstone}}
+    \label{tab:anggaran}
+    \vspace{-0.75em}\\
+    \hline
+    \textbf{No.} & \centering\textbf{Barang} & \textbf{Jumlah} & \textbf{Harga Satuan} & \textbf{Total Harga} \\ \hline
+    \endfirsthead
+    \hline
+    \textbf{No.} & \centering\textbf{Barang} & \textbf{Jumlah} & \textbf{Harga Satuan} & \textbf{Total Harga} \\ \hline
+    \endhead
+    1 & PLC Schneider Modicon M221 (\texttt{TM221ME16R/G}) & 1 & Rp 3.500.000,00 & Rp 3.500.000,00 \\ \hline
+    2 & \textit{Power Supply} 24V DC 5A & 1 & Rp 250.000,00 & Rp 250.000,00 \\ \hline
+    3 & Modul \textit{Relay} 4-\textit{Channel} 24V DC & 1 & Rp 100.000,00 & Rp 100.000,00 \\ \hline
+    4 & \textit{Miniature Circuit Breaker} (MCB) 1 Fasa 2A & 4 & Rp 45.000,00 & Rp 180.000,00 \\ \hline
+    5 & Lampu Indikator (Simulasi Beban) & 4 & Rp 25.000,00 & Rp 100.000,00 \\ \hline
+    6 & \textit{Fitting} Lampu dan Dudukan Panel & 4 & Rp 15.000,00 & Rp 60.000,00 \\ \hline
+    7 & Kabel \textit{Ethernet} (LAN) 2 meter & 2 & Rp 35.000,00 & Rp 70.000,00 \\ \hline
+    8 & Kabel Listrik (NYAF 1.5mm) 1 \textit{Roll} & 1 & Rp 150.000,00 & Rp 150.000,00 \\ \hline
+    9 & \textit{Terminal Block}, \textit{Skun}, dan \textit{DIN Rail} & 1 & Rp 150.000,00 & Rp 150.000,00 \\ \hline
+    10 & Pembuatan \textit{Box} Panel & 1 & Rp 600.000,00 & Rp 600.000,00 \\ \hline
+    11 & Sewa SCADA Server & 1 & Rp 150.000,00 & Rp 150.000,00 \\ \hline
+    \multicolumn{4}{|c|}{\textbf{TOTAL}} & \textbf{Rp 5.310.000,00} \\ \hline
+\end{longtable}
+\section{Jadwal Pelaksanaan Kegiatan \textit{Capstone}}
+\label{sec:Jadwal_Pelaksanaan}
+Jadwal pelaksanaan proyek \textit{Capstone} C-251 hingga C-501 berlangsung selama sembilan bulan. Terdiri dari lima bulan \textit{Capstone} C-251 (Tahap Perancangan) dan empat bulan \textit{Capstone} C-501 (Tahap Implementasi \& Pengujian). Detail kegiatan dan target pencapaian tertera pada Tabel~\ref{tab:jadwal_c251} dan Tabel~\ref{tab:jadwal_c501}.
+\begin{longtable}{|p{9cm}|2|2|2|2|2|}
+    \caption{Jadwal Pelaksanaan Kegiatan C-251 Tahun 2026}
+    \label{tab:jadwal_c251}
+    \vspace{-0.75em}\\
+    \hline
+    \multirow{2}{*}{\centering\textbf{Detail Kegiatan}} & \multicolumn{5}{c|}{\textbf{Bulan}} \\ \cline{2-6}
+    & \textbf{Feb} & \textbf{Mar} & \textbf{Apr} & \textbf{Mei} & \textbf{Jun} \\ \hline
+    \endfirsthead
+    \hline
+    \multirow{2}{*}{\centering\textbf{Detail Kegiatan}} & \multicolumn{5}{c|}{\textbf{Bulan}} \\ \cline{2-6}
+    & \textbf{Feb} & \textbf{Mar} & \textbf{Apr} & \textbf{Mei} & \textbf{Jun} \\ \hline
+    \endhead
+    \textbf{1. Persiapan:} & & & & & \\
+    a. Sosialisasi \textit{Capstone} & \cellcolor{darkgray} & & & & \\
+    b. Pemilihan Prioritas Tema & \cellcolor{darkgray} & & & & \\
+    c. Koordinasi Internal Tim dan Dosen Pembimbing & & \cellcolor{darkgray} & & & \\
+    d. Studi Literatur dan Pengkajian Metode & & \cellcolor{darkgray} & \cellcolor{darkgray} & & \\
+    e. Pembagian Tugas Anggota Kelompok & & & \cellcolor{darkgray} & & \\ \hline
+    \textbf{2. Pelaksanaan:} & & & & & \\
+    a. Desain Arsitektur \textit{Software} dan \textit{Hardware} & & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\
+    b. Simulasi \textit{Physics Engine} Tahap Awal & & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\
+    c. Penyusunan Dokumen C-251 & & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\ \hline
+    \textbf{3. Penyelesaian:} & & & & & \\
+    a. Finalisasi Dokumen C-251 & & & & \cellcolor{darkgray} & \\
+    b. Seminar Dokumen C-251 & & & & & \cellcolor{darkgray} \\ \hline
+\end{longtable}
+\begin{longtable}{|p{10cm}|2|2|2|2|}
+    \caption{Jadwal Pelaksanaan Kegiatan C-501 Tahun 2026}
+    \label{tab:jadwal_c501}
+    \vspace{-0.75em}\\
+    \hline
+    \multirow{2}{*}{\centering\textbf{Detail Kegiatan}} & \multicolumn{4}{c|}{\textbf{Bulan}} \\ \cline{2-5}
+    & \textbf{Ags} & \textbf{Sep} & \textbf{Okt} & \textbf{Nov} \\ \hline
+    \endfirsthead
+    \hline
+    \multirow{2}{*}{\centering\textbf{Detail Kegiatan}} & \multicolumn{4}{c|}{\textbf{Bulan}} \\ \cline{2-5}
+    & \textbf{Ags} & \textbf{Sep} & \textbf{Okt} & \textbf{Nov} \\ \hline
+    \endhead
+    \textbf{1. Persiapan:} & & & & \\
+    a. Revisi Dokumen C-251 & \cellcolor{darkgray} & & & \\
+    b. Diskusi Internal Tim dan Dosen Pembimbing & \cellcolor{darkgray} & & & \\
+    c. Pembelian Komponen PLC \& HIL & \cellcolor{darkgray} & & & \\ \hline
+    \textbf{2. Pelaksanaan:} & & & & \\
+    a. Fiksasi Desain \textit{Software} dan \textit{Hardware} & \cellcolor{darkgray} & & & \\
+    b. Perakitan Panel Fisik \textit{Hardware-in-the-Loop} & \cellcolor{darkgray} & \cellcolor{darkgray} & & \\
+    c. Pemrograman Web SCADA \& Integrasi MILP & \cellcolor{darkgray} & \cellcolor{darkgray} & & \\
+    d. Konfigurasi Komunikasi Modbus TCP & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\
+    e. Pengujian Sistem UFLS \& Skenario Kontingensi & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\
+    f. Pengumpulan Data Hasil Pengujian & & & \cellcolor{darkgray} & \\
+    g. Penyusunan Dokumen C-501 & & & \cellcolor{darkgray} & \\ \hline
+    \textbf{3. Penyelesaian:} & & & & \\
+    a. Evaluasi dan Perbaikan & & & \cellcolor{darkgray} & \\
+    b. Finalisasi Dokumen C-501 & & & \cellcolor{darkgray} & \cellcolor{darkgray} \\
+    c. Pelaksanaan Expo \textit{Capstone} & & & & \cellcolor{darkgray} \\ \hline
+\end{longtable}
+\section{Penanggung Jawab Prototipe \textit{Capstone}}
+\label{sec:Penanggung_Jawab}
+Sistem pembagian tugas proyek \textit{Capstone} dibagi menjadi empat bagian teknis utama, yaitu \textit{Physics Engine \& Solver}, \textit{SCADA Backend \& HMI}, Konfigurasi PLC \& \textit{Hardware-in-the-Loop}, serta Perakitan Mekanis Panel. Setiap bagian akan dipegang oleh masing-masing dua penanggung jawab yang sesuai dengan Tabel~\ref{tab:penanggung_jawab}.
+\begin{longtable}{|p{6.5cm}|c|c|c|c|}
+    \caption{Penganggung Jawab Bagian Prototipe}
+    \label{tab:penanggung_jawab}
+    \vspace{-0.75em}\\
+    \hline
+    \multirow{2}{*}{\centering\textbf{Bagian}} & \multicolumn{4}{c|}{\textbf{Anggota Kelompok}} \\ \cline{2-5}
+    & \textbf{A1} & \textbf{A2} & \textbf{A3} & \textbf{A4} \\ \hline
+    \endfirsthead
+    \hline
+    \multirow{2}{*}{\centering\textbf{Bagian}} & \multicolumn{4}{c|}{\textbf{Anggota Kelompok}} \\ \cline{2-5}
+    & \textbf{A1} & \textbf{A2} & \textbf{A3} & \textbf{A4} \\ \hline
+    \endhead
+    \textit{Physics Engine} \& Komputasi MILP & \cellcolor{darkgray} &  & & \cellcolor{darkgray} \\ \hline
+    \textit{SCADA Backend} \& Web HMI & & \cellcolor{darkgray} & \cellcolor{darkgray} & \\ \hline
+    PLC \& \textit{Hardware-in-the-Loop} (HIL) & & & \cellcolor{darkgray} & \cellcolor{darkgray} \\ \hline
+    Mekanis Panel \& Perakitan Listrik (MCB/Lampu) & \cellcolor{darkgray} & \cellcolor{darkgray} & &  \\ \hline
+\end{longtable}
+
+\vspace{1em}
+\noindent\textbf{Keterangan:}
+\begin{enumerate}
+    \item[a.] A1: Muhammad Akbar Maulana
+    \item[b.] A2: Muhammad Basel Fawaz Sigit
+    \item[c.] A3: Nathaniel Benelisha
+    \item[d.] A4: Ara Dwi Narendra
+\end{enumerate}

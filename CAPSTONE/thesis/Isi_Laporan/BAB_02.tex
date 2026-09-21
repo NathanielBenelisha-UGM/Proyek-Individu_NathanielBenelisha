@@ -1,0 +1,501 @@
+Kerangka teori disusun sebagai landasan perancangan modul pelepasan beban dan pemulihan optimal berbasis SCADA. Pembahasan diawali dengan karakteristik fisik sistem tenaga listrik sebagai objek kendali, kemudian dilanjutkan dengan konsep gangguan dan analisis kontingensi sebagai pemicu kondisi kritis pada sistem. Selanjutnya dibahas metode pelepasan beban konvensional beserta keterbatasannya, formulasi optimasi matematis yang menjadi dasar penyusunan solusi, serta arsitektur SCADA sebagai media implementasi dan pengendalian sistem. Variabel dan notasi yang digunakan pada setiap pembahasan diterapkan secara konsisten di seluruh dokumen.
+
+\section{Sistem Tenaga Listrik Sub-Transmisi}
+\label{sec:Sistem_Tenaga_Listrik_Distribusi}
+
+Sistem tenaga listrik (\textit{power system}) adalah infrastruktur yang menghasilkan, mentransmisikan, mendistribusikan, dan mengonsumsi energi listrik. Secara arsitekturis, sistem ini terdiri atas tiga segmen utama: pembangkitan (\textit{generation}), transmisi tegangan tinggi, dan distribusi tegangan menengah/rendah yang berhadapan langsung dengan konsumen akhir \cite{Glover2017}. Proyek \textit{capstone} ini berfokus pada jaringan sub-transmisi bertopologi \textit{mesh} yang menyuplai gardu distribusi, segmen yang sangat rentan terhadap gangguan beban dan berdampak masif pada kualitas layanan. Topologi jaringan sub-transmisi tipikal ditunjukkan pada Gambar \ref{fig:topologi_subtransmisi}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{gambar_2_1.png}
+    \caption{Topologi jaringan sub-transmisi \textit{mesh} tipikal.}
+    \label{fig:topologi_subtransmisi}
+\end{figure}
+
+\subsection{Representasi Jaringan: Bus, Saluran, dan Beban}
+\label{subsec:Representasi_Jaringan}
+
+Jaringan sub-transmisi dimodelkan sebagai graf berarah $G=(N,E)$, dengan himpunan ($N$) merepresentasikan seluruh bus (\textit{node}) dan himpunan ($E$) merepresentasikan seluruh saluran (\textit{branch/edge}). Setiap bus $i\in N$ dicirikan oleh empat besaran: tegangan kompleks $V_{i}=V_{i}\angle\delta_{i}$ (dengan $V_{i}$ adalah magnitudo dan $\delta_{i}$ adalah sudut fasa), injeksi daya aktif $P_{i}$, dan injeksi daya reaktif $Q_{i}$. Setiap saluran $(i,j)\in E$ direpresentasikan oleh impedansi seri $z_{ij}=r_{ij}+jx_{ij}$ (resistansi dan reaktansi) serta admitansi \textit{shunt} yang umumnya diabaikan pada saluran pendek. Berdasarkan variabel yang ditentukan, setiap bus diklasifikasikan ke dalam tiga jenis sebagaimana Tabel \ref{tab:tipe_bus_2_1} \cite{Bergen2000}.
+
+\begin{longtable}{|l|l|l|}
+\caption{Klasifikasi tipe bus dalam analisis aliran daya.}
+\label{tab:tipe_bus_2_1} \\
+\hline
+\textbf{Tipe Bus} & \textbf{Variabel Diketahui} & \textbf{Variabel Dicari} \\ \hline
+\endfirsthead
+
+\multicolumn{3}{c}%
+{{}} \\
+\hline
+\textbf{Tipe Bus} & \textbf{Variabel Diketahui} & \textbf{Variabel Dicari} \\ \hline
+\endhead
+
+\hline \multicolumn{3}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+\textit{Slack} (Referensi) & $V_{i}$, $\delta_{i}$ & $P_{i}$, $Q_{i}$ \\ \hline
+PV (Pembangkit) & $P_{i}$, $V_{i}$ & $Q_{i}$, $\delta_{i}$ \\ \hline
+PQ (Beban) & $P_{i}$, $Q_{i}$ & $V_{i}$, $\delta_{i}$ \\
+\end{longtable}
+
+\subsection{Matriks Admitansi Bus ($Y_{bus}$)}
+\label{subsec:Matriks_Admitansi_Bus}
+
+Hubungan elektris antar bus direpresentasikan oleh matriks admitansi bus $Y_{bus}$ berukuran $n\times n$ (dengan $n=|N|$). Elemen-elemennya didefinisikan sebagai:
+
+\begin{equation}
+    Y_{ii}=\sum_{j=0,j\ne i}^{n}y_{ij}
+\end{equation}
+(elemen diagonal: jumlah admitansi semua saluran yang terhubung ke bus i)
+
+\begin{equation}
+    Y_{ij}=Y_{ji}=-y_{ij}
+\end{equation}
+(elemen \textit{off-diagonal}: negatif admitansi saluran $i-j$) dengan $y_{ij}=1/z_{ij}$ adalah admitansi saluran. Matriks $Y_{bus}$ umumnya bersifat \textit{sparse} (sebagian besar elemennya nol), sehingga algoritma \textit{sparse matrix} dapat dimanfaatkan untuk efisiensi komputasi \cite{Bergen2000}.
+
+\section{Analisis Aliran Daya (\textit{Power Flow Analysis})}
+\label{sec:Analisis_Aliran_Daya}
+
+Analisis aliran daya (\textit{load flow}) menentukan keadaan tunak (\textit{steady-state}) sistem tenaga dengan menghitung tegangan $V_{i}\angle\delta_{i}$ pada setiap bus dan aliran daya $P_{i}$, $Q_{i}$ pada setiap saluran untuk kondisi pembangkitan dan beban tertentu. Hasilnya digunakan sebagai kondisi awal dalam analisis kontingensi dan sebagai batasan dalam formulasi optimasi \cite{Bergen2000, Farivar2013}.
+
+\subsection{Persamaan Aliran Daya}
+\label{subsec:Persamaan_Aliran_Daya}
+
+Injeksi daya aktif $P_{i}$ dan reaktif $Q_{i}$ pada bus i dinyatakan oleh persamaan aliran daya non-linier:
+\begin{equation}
+\begin{aligned}
+    P_{i} &= |V_{i}|^{2}G_{ii}+|V_{i}|\sum_{j=1,j\ne i}^{n}|V_{j}|(G_{ij}\cos\delta_{ij}+B_{ij}\sin\delta_{ij}) \\
+    Q_{i} &= -|V_{i}|^{2}B_{ii}-|V_{i}|\sum_{j=1,j\ne i}^{n}|V_{j}|(G_{ij}\sin\delta_{ij}-B_{ij}\cos\delta_{ij})
+\end{aligned}
+\end{equation}
+dengan $G_{ij}$ dan $B_{ij}$ adalah bagian nyata (konduktansi) dan bagian imajiner (suseptansi) dari elemen $Y_{ij}$, serta $\delta_{ij}=\delta_{i}-\delta_{j}$ adalah selisih sudut fasa. Persamaan $P_{i}$ dan $Q_{i}$ membentuk sistem persamaan non-linier yang diselesaikan secara iteratif \cite{Bergen2000}.
+
+\subsection{Metode Newton-Raphson}
+\label{subsec:Metode_Newton_Raphson}
+
+Metode Newton-Raphson (NR) adalah metode penyelesaian aliran daya yang paling umum digunakan karena konvergensinya yang kuadratik. Sistem persamaan $P_{i}$ dan $Q_{i}$ dilinearisasi pada tiap iterasi k sebagai:
+\begin{equation}
+    \begin{bmatrix} \Delta P \\ \Delta Q \end{bmatrix} = \begin{bmatrix} J_{1} & J_{2} \\ J_{3} & J_{4} \end{bmatrix} \begin{bmatrix} \Delta\delta \\ \Delta|V| \end{bmatrix}
+\end{equation}
+\begin{equation}
+    \begin{bmatrix} \Delta P \\ \Delta Q \end{bmatrix} = \begin{bmatrix} \frac{\partial P}{\partial\delta} & \frac{\partial P}{\partial V} \\ \frac{\partial Q}{\partial\delta} & \frac{\partial Q}{\partial V} \end{bmatrix} \begin{bmatrix} \Delta\delta \\ \Delta|V| \end{bmatrix}
+\end{equation}
+Matriks pada sisi kanan disebut matriks Jacobian. Iterasi berlanjut hingga \textit{mismatches} $\Delta P$ dan $\Delta Q$ memenuhi toleransi konvergensi yang ditentukan (umumnya $10^{-4} \text{ p.u.}$) \cite{Bergen2000}. Metode NR merupakan dasar dari sebagian besar \textit{solver} aliran daya komersial dan \textit{open-source} yang akan digunakan dalam proyek ini.
+
+\subsection{Batas Tegangan Operasional}
+\label{subsec:Batas_Tegangan_Operasional}
+
+Standar operasi jaringan distribusi mensyaratkan magnitudo tegangan pada setiap bus berada dalam rentang aman. Batas tegangan operasional yang digunakan dalam proyek ini mengacu pada Peraturan Menteri ESDM dan praktik umum operasi jaringan \cite{PermenESDM2007}:
+\begin{equation}
+    0.95 \text{ p.u.} \le V_{i} \le 1.05 \text{ p.u.}; \forall i \in N
+\end{equation}
+Pelanggaran terhadap batasan menandakan kondisi \textit{undervoltage} atau \textit{overvoltage} yang tidak dapat diterima dan menjadi salah satu pemicu tindakan pelepasan beban.
+
+\section{Dinamika Frekuensi Sistem Tenaga}
+\label{sec:Dinamika_Frekuensi_Sistem_Tenaga}
+
+Frekuensi sistem tenaga listrik merupakan indikator keseimbangan antara total daya yang dibangkitkan dan total daya yang dikonsumsi beban pada setiap saat. Pada kondisi normal, frekuensi dijaga pada nilai nominal $f_0$ (50 Hz di Indonesia). Ketika terjadi ketidakseimbangan daya, frekuensi akan berdeviasi, dan pemahaman dinamika perubahannya sangat penting untuk merancang respons yang tepat.
+
+\subsection{Persamaan Ayun (\textit{Swing Equation})}
+\label{subsec:Persamaan_Ayun}
+
+Dinamika frekuensi sistem tenaga dengan sumber inersia tunggal ekivalen dimodelkan oleh persamaan ayun (\textit{swing equation}), yang diturunkan dari hukum kedua Newton untuk gerak rotasi mesin sinkron \cite{Kundur1994}:
+\begin{equation}
+    \frac{2H}{\omega_s} \frac{dw}{dt} = P_m - P_e = \Delta P
+\end{equation}
+dengan $H$ (s) adalah konstanta inersia sistem ekivalen, $\omega_{s}$ (rad/s) adalah kecepatan sudut sinkron nominal, $w$ (rad/s) adalah kecepatan sudut aktual rotor, $P_{m}$ (p.u) adalah daya mekanis input pembangkit, $P_{e}$ (p.u) adalah daya elektris output, dan $\Delta P=P_{m}-P_{e}$ adalah ketidakseimbangan daya aktif. Dalam konteks analisis frekuensi sistem, persamaan ayun sering diekspresikan dalam bentuk deviasi frekuensi:
+\begin{equation}
+    \frac{df}{dt} = \left(\frac{f_{0}}{2H}\right) \cdot \frac{\Delta P}{S_{base}}
+\end{equation}
+dengan $f_{0}=50 \text{ Hz}$ dan $S_{base}$ adalah daya dasar sistem (VA). Persamaan $df/dt$ menegaskan hubungan linear langsung antara ketidakseimbangan daya dan laju perubahan frekuensi. 
+
+\subsection{Karakteristik Fisik Konstanta Inersia ($H$)}
+\label{subsec:Karakteristik_Fisik_Konstanta_Inersia}
+Secara teoretis, konstanta inersia $H$ untuk suatu unit generator didefinisikan berdasarkan energi kinetik rotor yang dinormalisasi terhadap kapasitas nominalnya. Persamaan untuk menghitung $H$ dinyatakan sebagai \cite{Kundur1994}:
+\begin{equation}
+    H = 5{.}48 \times 10^{-9} \frac{J \cdot (\text{RPM})^2}{\text{S}_{base}}
+\end{equation}
+dengan $J$ adalah momen inersia rotor ($\text{kg}\cdot\text{m}^2$) dan RPM adalah kecepatan putar sinkron. Meskipun referensi tabel standar sering kali merujuk pada spesifikasi sistem 60 Hz (misalnya 3600 rpm untuk mesin 2-kutub), nilai $H$ tersebut bersifat independen terhadap frekuensi \textit{grid} dasar (50 Hz maupun 60 Hz). Untuk mesin dengan desain rating daya ($S_{base}$) yang sama, generator 50 Hz beroperasi pada kecepatan yang lebih rendah (3000 rpm), sehingga membutuhkan torsi mekanik ($T$) yang lebih besar karena $S_{base} \propto T \cdot \omega$. Kebutuhan torsi yang lebih tinggi mengharuskan pabrikan untuk memperbesar dimensi fisik rotor, yang secara proporsional meningkatkan momen inersia ($J$) berbanding terbalik dengan kuadrat rasio kecepatan sinkronnya:
+\begin{equation}
+    J_{50\text{Hz}} = J_{60\text{Hz}} \times \left(\frac{3600}{3000}\right)^2
+\end{equation}
+Substitusi persamaan momen inersia tersebut ke dalam persamaan $H$ membuktikan bahwa efek penurunan kuadrat kecepatan pada generator 50 Hz secara matematis akan saling meniadakan (\textit{canceled out}) dengan peningkatan ukuran massa inersianya. Oleh karena itu, rentang tipikal nilai $H$ yang pada sistem 60 Hz valid digunakan untuk pemodelan stabilitas sistem 50 Hz.
+
+\subsection{Laju Perubahan Frekuensi (RoCoF)}
+\label{subsec:Laju_Perubahan_Frekuensi}
+
+Laju perubahan frekuensi (RoCoF) didefinisikan sebagai $df/dt$ segera setelah gangguan terjadi, sebelum respons \textit{governor} dan \textit{Automatic Voltage Regulator} (AVR) memasuki keadaan tunak. Dari persamaan $df/dt$, RoCoF sesaat pasca-gangguan dinyatakan:
+\begin{equation}
+    RoCoF = \frac{\Delta f}{\Delta t} \approx f_{0} \cdot \frac{\Delta P_{deficit}}{2H \cdot S_{base}}
+\end{equation}
+dengan $\Delta P_{deficit}$ adalah besar defisit daya akibat gangguan. Persamaan RoCoF menunjukkan bahwa semakin kecil nilai H, sebagaimana terjadi pada sistem dengan tinggi penetrasi EBT berbasis inverter, semakin besar nilai RoCoF untuk defisit daya yang sama. Nilai kritis RoCoF yang umumnya ditetapkan sebagai ambang batas proteksi adalah 0.5 Hz/s \cite{Kundur1994, Drhorhi2024}.
+
+\subsection{Nadir Frekuensi dan Standar Operasi}
+\label{subsec:Nadir_Frekuensi_dan_Standar_Operasi}
+
+Setelah terjadi gangguan, frekuensi sistem akan turun mencapai titik terendah yang disebut frekuensi nadir sebelum respons \textit{governor} bekerja. Gambar \ref{fig:dinamika_frekuensi} mengilustrasikan profil dinamika frekuensi pasca-gangguan.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{gambar_2_2.png}
+    \caption{Profil dinamika frekuensi pasca-gangguan pembangkit.}
+    \label{fig:dinamika_frekuensi}
+\end{figure}
+
+Standar operasi PLN dan regulasi ESDM menetapkan bahwa frekuensi sistem harus dijaga dalam rentang:
+\begin{equation}
+\begin{aligned}
+    49.5 \text{ Hz} \le f \le 50.5 \text{ Hz} \quad &\text{(operasi normal)} \\
+    f_{nadir} \ge 47.5 \text{ Hz} \quad &\text{(batas kritis sebelum pemadaman total)}
+\end{aligned}
+\end{equation}
+Apabila frekuensi menyentuh 49.0 Hz atau lebih rendah, skema pelepasan beban otomatis wajib diaktifkan untuk mencegah kolaps sistem.
+
+\subsection{Dampak Penetrasi EBT terhadap Inersia Sistem}
+\label{subsec:Dampak_Penetrasi_EBT}
+
+Konstanta inersia sistem ekivalen H merupakan rata-rata berbobot dari konstanta inersia seluruh unit pembangkit yang terhubung ke jaringan:
+\begin{equation}
+    H_{sys} = \frac{\sum_{i=1}^{n}(H_{i}\cdot S_{i})}{\sum_{i=1}^{n}S_{i}}
+\end{equation}
+dengan $H_{i}$ dan $S_{i}$ adalah konstanta inersia dan kapasitas terpasang unit pembangkit i. Generator sinkron konvensional (turbin uap, turbin gas, PLTA) memiliki nilai H berkisar antara 2 - 9 s, sedangkan pembangkit berbasis inverter (PLTS, PLTB) secara alami memiliki $H=0$ kecuali dilengkapi dengan kendali inersia sintetis (\textit{synthetic inertia}). Meningkatnya proporsi pembangkit berbasis inverter dalam bauran energi secara langsung menurunkan $H_{sys}$, dan hal ini meningkatkan sensitivitas RoCoF terhadap ketidakseimbangan daya \cite{Kundur1994, Drhorhi2024}.
+
+\section{Gangguan dan Analisis Kontingensi}
+\label{sec:Gangguan_dan_Analisis_Kontingensi}
+
+Gangguan (\textit{contingency}) dalam sistem tenaga adalah peristiwa tak terduga yang menyebabkan perubahan mendadak pada topologi atau kapasitas jaringan. Analisis kontingensi adalah proses sistematis untuk mengevaluasi dampak dari kemungkinan gangguan terhadap keamanan operasi sistem sebelum gangguan tersebut benar-benar terjadi, sehingga respons yang tepat dapat dipersiapkan \cite{Wood2014}.
+
+\subsection{Klasifikasi Gangguan}
+\label{subsec:Klasifikasi_Gangguan}
+
+Standar keamanan sistem tenaga umumnya menggunakan kriteria N-k yang menyatakan bahwa sistem harus mampu beroperasi dengan aman setelah kehilangan k elemen sekaligus. Dalam proyek ini, dua jenis gangguan dipertimbangkan:
+
+\begin{enumerate}
+\item[a.] \textbf{Gangguan Kontingensi Pembangkit (\textit{Generation Contingency}, N-1G atau N-2G).} Terjadi ketika satu atau lebih unit pembangkit \textit{trip} (terputus mendadak dari jaringan). Efek langsungnya adalah defisit daya aktif $\Delta P_{G}$ yang menyebabkan penurunan frekuensi sesuai persamaan $df/dt$. Besarnya defisit adalah daya yang semula disuplai unit yang \textit{trip}:
+\begin{equation}
+    \Delta P_{G} = P_{G,trip} \text{ (MW)}
+\end{equation}
+
+\item[b.] \textbf{Gangguan Kontingensi Penyulang (\textit{Feeder Contingency}, N-1F).} Terjadi ketika saluran distribusi (penyulang) mengalami gangguan dan \textit{circuit breaker} (CB) memutusnya. Efek langsungnya adalah isolasi sebagian jaringan, sehingga beban yang semula terlayani oleh penyulang tersebut kehilangan pasokan. Selain itu, redistribusi aliran daya pada saluran yang masih aktif dapat menyebabkan kelebihan beban (\textit{overload}) atau \textit{undervoltage} pada bus tertentu.
+\end{enumerate}
+
+\subsection{Prosedur Analisis Kontingensi}
+\label{subsec:Prosedur_Analisis_Kontingensi}
+
+Analisis kontingensi dilakukan melalui serangkaian simulasi aliran daya pasca-gangguan (\textit{post-contingency power flow}). Untuk setiap skenario gangguan c dalam himpunan kontingensi C, langkah-langkahnya adalah:
+\begin{enumerate}
+    \item Hapus elemen yang terganggu (unit pembangkit atau saluran) dari model jaringan.
+    \item Selesaikan ulang persamaan aliran daya untuk jaringan yang telah dimodifikasi.
+    \item Periksa apakah ada pelanggaran batasan tegangan atau batas kapasitas termal saluran.
+    \item Jika pelanggaran terdeteksi, tandai sebagai \textit{contingency} kritis dan rekam besarnya defisit daya.
+\end{enumerate}
+Hasil analisis kontingensi berupa daftar gangguan kritis beserta besarnya defisit daya menjadi masukan (input) bagi modul optimasi pelepasan beban.
+
+\section{Skema Pelepasan Beban Konvensional (UFLS)}
+\label{sec:Skema_Pelepasan_Beban_Konvensional}
+
+Pelepasan beban (\textit{load shedding}) merupakan tindakan protektif yang dilakukan dengan memutus sejumlah beban secara terkontrol untuk mencegah penurunan frekuensi atau tegangan yang dapat mengarah pada kolaps sistem. Berbagai skema pelepasan beban konvensional telah banyak diterapkan dalam operasi sistem tenaga listrik, namun masing-masing memiliki keterbatasan dalam menghadapi kondisi jaringan yang semakin dinamis. Keterbatasan tersebut menjadi dasar pengembangan pendekatan pelepasan beban yang lebih adaptif dan optimal dalam proyek ini.
+
+\subsection{\textit{Under Frequency Load Shedding} (UFLS)}
+\label{subsec:Under_Frequency_Load_Shedding}
+
+Skema UFLS konvensional menggunakan relai frekuensi rendah yang memantau frekuensi bus lokal dan secara otomatis memerintahkan \textit{circuit breaker} untuk memutus beban apabila frekuensi menyentuh ambang batas yang telah dipreset. Skema ini umumnya diimplementasikan dalam beberapa tahap (\textit{stages}) bertingkat, sebagaimana dicontohkan pada Tabel \ref{tab:skema_ufls} \cite{IEEE1512_2023}.
+
+\begin{longtable}{|c|c|c|}
+\caption{Contoh skema UFLS bertingkat tipikal. Nilai aktual bervariasi per utilitas.}
+\label{tab:skema_ufls} \\
+\hline
+\textbf{Tahap} & \textbf{\textit{Threshold} Frekuensi (Hz)} & \textbf{Estimasi Beban Dilepas (\%)} \\ \hline
+\endfirsthead
+
+\multicolumn{3}{c}%
+{{}} \\
+\hline
+\textbf{Tahap} & \textbf{Threshold Frekuensi (Hz)} & \textbf{Estimasi Beban Dilepas (\%)} \\ \hline
+\endhead
+
+\hline \multicolumn{3}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+1 & 49.0 & 10 \\ \hline
+2 & 48.5 & 10 \\ \hline
+3 & 48.0 & 10 \\ \hline
+4 & 47.5 & 10 \\
+\end{longtable}
+
+\subsection{Keterbatasan Skema UFLS Konvensional}
+\label{subsec:Keterbatasan_Skema_UFLS}
+
+Meskipun sederhana dan andal, skema UFLS statis memiliki keterbatasan fundamental yang semakin menonjol pada sistem dengan inersia rendah \cite{Elsaadany2025, Arani2021}:
+
+\begin{enumerate}
+\item[a.] \textbf{Buta terhadap kondisi global jaringan:} Relai UFLS hanya membaca frekuensi di bus lokal dan tidak memiliki visibilitas terhadap kondisi tegangan, aliran daya, atau lokasi gangguan. Akibatnya, keputusan pemutusan dapat salah lokasi dan tidak proporsional.
+\item[b.] \textbf{\textit{Overshedding}:} Jumlah beban yang dilepas per tahap ditetapkan sebagai persentase tetap (misalnya 10\%) tanpa mempertimbangkan besarnya defisit daya aktual. Pada gangguan kecil, tahap pertama sudah melampaui kebutuhan, menyebabkan \textit{overshedding} dan lonjakan frekuensi yang berlebihan (\textit{frequency overshoot}).
+\item[c.] \textbf{Ketidakmampuan adaptasi terhadap inersia yang berubah:} Ambang batas frekuensi yang dipreset tidak mempertimbangkan nilai $H_{sys}$ saat itu. Pada sistem dengan inersia rendah, frekuensi turun sangat cepat dan \textit{threshold} statis dapat terlampaui sebelum tahap awal sempat memberikan dampak.
+\item[d.] \textbf{Tidak mempertimbangkan prioritas beban:} Relai konvensional tidak membedakan antara beban kritis dan beban non-kritis, sehingga beban yang diputus tidak selalu beban yang paling tepat secara sosial dan ekonomis.
+\item[e.] \textbf{Tidak ada mekanisme pemulihan otomatis terstruktur:} UFLS konvensional tidak memiliki modul untuk menentukan urutan pengaktifan kembali beban pasca-stabilisasi, sehingga proses pemulihan bergantung sepenuhnya pada keputusan operator manual.
+\end{enumerate}
+
+Keterbatasan-keterbatasan inilah yang mendorong pendekatan optimasi matematis yang dirumuskan pada bagian selanjutnya.
+
+\section{Optimasi Matematis untuk Pelepasan Beban Optimal}
+\label{sec:Optimasi_Matematis}
+
+Pelepasan beban optimal (\textit{Optimal Load Shedding}/OLS) merumuskan masalah penentuan beban yang harus diputus sebagai persoalan optimasi matematika terstruktur: minimalkan kerugian (fungsi objektif) dengan mematuhi seluruh batasan fisik dan operasional sistem (\textit{constraint}). Pembahasan ini terlebih dahulu menyajikan kerangka MILP sebagai pendekatan utama, dilanjutkan dengan formulasi khusus untuk OLS, kemudian membahas alternatif metode lain beserta \textit{trade-off} masing-masing.
+
+\subsection{\textit{Mixed-Integer Linear Programming} (MILP)}
+\label{subsec:Mixed_Integer_Linear_Programming}
+
+\textit{Mixed-Integer Linear Programming} (MILP) adalah kelas optimasi dengan beberapa atau seluruh variabel keputusan berupa bilangan bulat (\textit{integer}), sementara fungsi objektif dan seluruh batasannya bersifat linier. Bentuk standar MILP adalah \cite{Wolsey2021}:
+\begin{equation}
+\begin{aligned}
+    \min \quad & c^{T}x+d^{T}y \\
+    \text{s.t.} \quad & Ax+By\le b \\
+    & x\in\mathbb{R}^{n}, y\in\{0,1\}^{m}
+\end{aligned}
+\end{equation}
+dengan x adalah vektor variabel kontinu, y adalah vektor variabel biner (keputusan diskret), c dan d adalah vektor koefisien fungsi objektif, A, B adalah matriks batasan, dan b adalah vektor batas kanan. MILP diselesaikan menggunakan algoritma \textit{Branch-and-Bound} (B\&B) yang secara sistematis membagi ruang solusi dan mengevaluasi relaksasi LP pada setiap \textit{node} pohon pencarian. \textit{Solver} MILP modern (Gurobi, CPLEX, HiGHS) dapat menyelesaikan masalah berukuran sedang dalam orde milidetik hingga detik \cite{Wolsey2021, Mohan2020}.
+
+\subsection{Formulasi OLS sebagai MILP}
+\label{subsec:Formulasi_OLS_sebagai_MILP}
+
+Berdasarkan kerangka di atas, persoalan pelepasan beban optimal untuk menangani defisit daya pada konteks jaringan sub-transmisi dengan himpunan bus beban $L\subseteq N$ dirumuskan sebagai berikut \cite{Elsaadany2025, Mohan2020}.
+
+\begin{enumerate}
+\item[a.]{\textbf{Variabel Keputusan}}\\
+Variabel keputusan terdiri atas:
+\begin{itemize}
+    \item[i.] $z_{i}\in\{0,1\}$: variabel biner, bernilai 1 jika beban bus i dilepas, 0 jika dipertahankan $(\forall i\in L)$
+    \item[ii.] $P_{i,shed}\in\mathbb{R}^{+}$: daya aktif yang dilepas pada bus i (MW) $(\forall i\in L)$
+    \item[iii.] $V_{i}$, $\delta_{i}$: magnitudo tegangan dan sudut fasa bus i (p. u., rad) $(\forall i\in N)$
+\end{itemize}
+
+\item[b.]{\textbf{Fungsi Objektif}}\\
+Fungsi objektif meminimalkan total biaya energi tak tersalurkan (\textit{Cost of Energy Not Supplied} / CENS) berbobot prioritas beban:
+\begin{equation}
+    \min \sum_{i\in L}w_{i}\cdot P_{i,shed}
+\end{equation}
+dengan $w_{i}\ge0$ adalah bobot biaya (\textit{penalty weight}) pemutusan beban pada bus $i$. Nilai $w_{i}$ mencerminkan skala kerugian finansial aktual yang dialami konsumen apabila terjadi pemadaman. 
+
+Berdasarkan data empiris pada standar IEEE 493 \cite{ieee493} tentang \textit{Average per event interruption costs}, biaya kerugian akibat pemadaman berdurasi 1 jam untuk fasilitas kritis (institusi/organisasi) dan sektor industri secara historis dapat mencapai sekitar 20 hingga 30 kali lipat lebih masif dibandingkan sektor komersial biasa. Terlebih lagi, pemadaman pada fasilitas kesehatan atau institusi kritis dalam rentang waktu sekilas (2 detik) saja langsung memicu kerugian hingga puluhan ribu dolar yang bersifat mengancam jiwa (\textit{life-threatening}).
+
+Mengingat metrik kerugian (\textit{Cost of Outage}) di lapangan bertumbuh secara eksponensial di antara sektor-sektor tersebut, model MILP ini mengabstraksikan fenomena ekonomi tersebut ke dalam bentuk pembobotan penalti logaritmik (orde magnitudo). Beban biasa direpresentasikan dengan bobot fundamental ($w=1$), beban esensial/industri diorde lebih tinggi ($w=10$), dan beban sangat kritis ditempatkan pada batas atas ($w=100$). Konfigurasi bobot dengan rasio 10 kali lipat antar-level ini menggaransi secara matematis bahwa \textit{solver} akan selalu mengorbankan beban kelas terbawah sebelum menyentuh fasilitas kritis \cite{IEEE1512_2023, Elsaadany2025}.
+
+\item[c.]{\textbf{Batasan-Batasan}}\\
+Batasan yang harus dipenuhi secara simultan adalah sebagai berikut.
+\begin{itemize}
+\item[i.] Pemenuhan defisit daya (keseimbangan daya aktif) (C1):
+\begin{equation}
+    \sum_{i\in L}P_{i,shed}\ge\Delta P_{deficit}
+\end{equation}
+Batasan ini memastikan jumlah beban yang dilepas mencukupi untuk menutup defisit daya dan menghentikan penurunan frekuensi.
+
+\item[ii.] Batas kapasitas beban yang dapat dilepas (C2):
+\begin{equation}
+    0\le P_{i,shed}\le z_{i}\cdot P_{i,max}; (\forall i\in L)
+\end{equation}
+dengan $P_{i,max}$ adalah total daya aktif beban bus i. Batasan ini menghubungkan variabel biner $z_{i}$ dengan variabel kontinu $P_{i,shed}$ pelepasan daya hanya diperbolehkan jika $z_{i}=1$ (beban diputus).
+
+\item[iii.] Profil tegangan setelah pelepasan (C3):
+\begin{equation}
+    V_{min}\le V_{i}\le V_{max} \quad \forall i\in N \quad (V_{min}=0.95; V_{max}=1.05)
+\end{equation}
+
+\item[iv.] Kapasitas termal saluran (C4):
+\begin{equation}
+    |S_{ij}|\le S_{ij,max} \quad \forall(i,j)\in E
+\end{equation}
+dengan $S_{ij}$ adalah daya semu yang mengalir pada saluran (i,j) dan $S_{ij,max}$ adalah batas kapasitas termalnya (MVA).
+
+\item[v.] Persamaan aliran daya pasca-pelepasan (linearisasi) (C5):
+Untuk mempertahankan linieritas model, persamaan aliran daya dilinearisasi menggunakan pendekatan \textit{DC Power Flow} atau linearisasi \textit{First-Order Taylor} di sekitar titik operasi, yang mengabaikan rugi-rugi reaktif dan mengasumsikan magnitude tegangan mendekati 1 p.u. \cite{Farivar2013}:
+\begin{equation}
+    P_{ij}\approx(\delta_{i}-\delta_{j})/x_{ij}
+\end{equation}
+
+\item[vi.] Prioritas beban kritis (perlindungan beban kritis) (C6):
+\begin{equation}
+    z_{i}=0 \quad \forall i\in L_{critical}
+\end{equation}
+Batasan ini secara eksplisit melarang pelepasan beban pada bus-bus yang dikategorikan kritis (himpunan $L_{critical}\subseteq L$), terlepas dari solusi optimasi.
+\end{itemize}
+\end{enumerate}
+
+
+\subsection{Linearisasi Batasan Tegangan}
+\label{subsec:Linearisasi_Batasan_Tegangan}
+
+Batasan tegangan dan aliran daya reaktif sejatinya non-linier. Untuk menjaga linieritas MILP, dua pendekatan umum digunakan:
+
+\begin{enumerate}
+\item[a.] {\textbf{\textit{DC Power Flow}.} Mengasumsikan $V_{i}\approx1 \text{ p.u.}$ dan $\delta_{ij}$ kecil, menghasilkan persamaan linier. Cepat namun mengabaikan aspek tegangan reaktif}.
+
+\item[b.] {\textbf{\textit{Second-Order Cone Programming} (SOCP).} Merupakan relaksasi konveks dari persamaan aliran daya AC penuh yang mempertahankan variabel tegangan secara eksplisit dalam bentuk relaksasi \textit{semidefinite}. Formulasi SOCP untuk jaringan distribusi radial (BFM/\textit{Branch Flow Model}) dikenal sebagai relaksasi Baran-Wu dan terbukti memberikan solusi yang tepat (\textit{exact relaxation}) pada jaringan radial tanpa pembangkit terdistribusi \cite{Farivar2013}. Pilihan antara DC-MILP dan SOCP bergantung pada akurasi yang diinginkan versus waktu komputasi}.
+\end{enumerate}
+
+\subsection{Perbandingan Pendekatan Solusi}
+\label{subsec:Perbandingan_Pendekatan_Solusi}
+
+Tabel \ref{tab:perbandingan_solusi} merangkum perbandingan antara tiga pendekatan utama untuk masalah pelepasan beban optimal, termasuk MILP yang dipilih sebagai pendekatan utama proyek ini \cite{Elsaadany2025, Arani2021, Zhou2024}.
+
+\begin{longtable}{|p{2.5cm}|p{3cm}|p{3cm}|p{3cm}|p{3cm}|}
+\caption{Perbandingan pendekatan solusi pelepasan beban optimal.}
+\label{tab:perbandingan_solusi} \\
+\hline
+\textbf{Pendekatan} & \textbf{Presisi} & \textbf{Kecepatan Komputasi} & \textbf{Transparansi / Auditabilitas} & \textbf{Kesesuaian SCADA \textit{Real-Time}} \\ \hline
+\endfirsthead
+
+\multicolumn{5}{c}%
+{{}} \\
+\hline
+\textbf{Pendekatan} & \textbf{Presisi} & \textbf{Kecepatan Komputasi} & \textbf{Transparansi / Auditabilitas} & \textbf{Kesesuaian SCADA Real-Time} \\ \hline
+\endhead
+
+\endfoot
+
+\hline
+\endlastfoot
+
+UFLS Statis & Rendah (preset) & Sangat Cepat ($< 1$ s) & Tinggi (\textit{rule-based}) & Ya (eksisting) \\ \hline
+MILP (DC/SOCP) & Tinggi (optimal gap $< 1\%$) & Menengah ($< 5$ s, tergantung ukuran) & Sangat Tinggi (solusi dapat diverifikasi) & Ya (dengan \textit{solver} cepat) \\ \hline
+Deep RL (DDPG/PPO) & Sangat Tinggi (adaptif) & Sangat Cepat saat inferensi & Rendah (\textit{black-box}) & Terbatas (butuh validasi ekstensif) \\
+\end{longtable}
+
+Berdasarkan Tabel \ref{tab:perbandingan_solusi}, MILP dipilih sebagai pendekatan utama dalam proyek ini karena kombinasi optimalitas yang terukur, transparansi solusi yang dibutuhkan operator SCADA, dan kemampuan penyelesaian dalam batasan waktu operasional \textit{real-time} menggunakan \textit{solver} modern. Pendekatan SOCP dipertimbangkan sebagai ekstensi apabila akurasi tegangan AC penuh diperlukan.
+
+\section{Algoritma Pemulihan Pasca-Gangguan (\textit{Load Restoration})}
+\label{sec:Algoritma_Pemulihan_Pasca_Gangguan}
+
+Pemulihan beban (\textit{load restoration}) adalah proses pengaktifan kembali beban yang sebelumnya dilepas setelah sistem kembali ke kondisi yang aman dan stabil. Proses ini sama pentingnya dengan pelepasan beban karena pengaktifan yang tidak terkontrol dapat memicu \textit{cold load pickup} (CLPU), lonjakan arus awal yang signifikan akibat akumulasi beban selama pemadaman, yang berpotensi memicu gangguan baru \cite{Adibi2000}.
+
+\subsection{\textit{Cold Load Pickup} (CLPU)}
+\label{subsec:Cold_Load_Pickup}
+
+Fenomena CLPU terjadi karena beban termostatik (AC, pemanas) yang terakumulasi selama pemadaman akan nyala secara bersamaan saat daya dikembalikan, menyebabkan arus awal 2 - 3 kali nilai nominal dalam beberapa menit pertama \cite{Adibi2000}. Algoritma pemulihan harus mempertimbangkan faktor pembesaran beban ini:
+\begin{equation}
+    P_{i,pickup} = K_{CLPU} P_{i, nominal}
+\end{equation}
+dengan $K_{CLPU}\ge1$ adalah faktor CLPU yang merupakan fungsi meningkat dari durasi pemadaman dan karakteristik beban bus i.
+
+\subsection{Kriteria Kesiapan Pemulihan}
+\label{subsec:Kriteria_Kesiapan_Pemulihan}
+
+Sebelum pengaktifan kembali beban dapat dimulai, kondisi sistem harus memenuhi seluruh kriteria keamanan berikut secara bersamaan:
+
+\begin{enumerate}
+    \item[a.] Frekuensi sistem telah kembali ke rentang operasi normal: $49.5 \text{ Hz} \le f \le 50.5 \text{ Hz}$ selama minimal 30 detik.
+    \item[b.] Profil tegangan pada seluruh bus memenuhi batasan.
+    \item[c.] Cadangan pembangkitan tersedia lebih besar atau sama dengan beban yang akan dikembalikan ditambah margin CLPU.
+\end{enumerate}
+
+\subsection{Formulasi Penjadwalan Pemulihan Bertahap}
+\label{subsec:Formulasi_Penjadwalan_Pemulihan_Bertahap}
+
+Pemulihan dilakukan secara bertahap. Pada setiap tahap $\tau$, dipilih subset beban $R_{\tau}\subseteq L_{shed}$ (himpunan beban yang belum dipulihkan) untuk diaktifkan kembali, sedemikian sehingga:
+\begin{equation}
+    \sum_{i\in R_{\tau}}\alpha_{i}\cdot P_{i,shed}\le P_{reserve}(\tau)-P_{margin}
+\end{equation}
+dengan $P_{reserve}(\tau)$ adalah kapasitas pembangkitan cadangan yang tersedia pada tahap $\tau$ dan $P_{margin}$ adalah margin keamanan. Urutan pemulihan memprioritaskan beban dengan prioritas tertinggi (nilai $w_{i}$ terbesar) yang belum dipulihkan. Setelah setiap tahap, sistem menunggu stabilisasi frekuensi dan tegangan sebelum melanjutkan ke tahap berikutnya \cite{Adibi2000}.
+
+\section{Arsitektur SCADA dan Integrasi Sistem}
+\label{sec:Arsitektur_SCADA_dan_Integrasi_Sistem}
+
+\textit{Supervisory Control and Data Acquisition} (SCADA) adalah sistem pengawasan dan kendali terdistribusi yang mengumpulkan data \textit{real-time} dari proses fisik, menampilkannya kepada operator, dan mengeksekusi perintah kendali. Dalam konteks sistem tenaga listrik, SCADA merupakan platform operasional tempat modul OLS akan diintegrasikan \cite{Nazarov2019}.
+
+\subsection{Komponen Arsitektur SCADA}
+\label{subsec:Komponen_Arsitektur_SCADA}
+
+Gambar \ref{fig:arsitektur_scada} mengilustrasikan arsitektur SCADA sistem tenaga beserta posisi modul OLS yang dikembangkan.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.1\linewidth]{gambar_2_3.png}
+    \caption{Arsitektur SCADA sistem tenaga distribusi dan posisi modul OLS.}
+    \label{fig:arsitektur_scada}
+\end{figure}
+
+Komponen utama arsitektur SCADA sistem tenaga adalah sebagai berikut \cite{Nazarov2019}.
+
+\begin{enumerate}
+\item[a.] \textbf{\textit{Remote Terminal Unit} (RTU) / \textit{Programmable Logic Controller} (PLC):} Perangkat lapangan yang mengakuisisi data sensor (tegangan, arus, frekuensi, status CB) dan mengeksekusi perintah kendali dari pusat kendali. Dalam proyek ini, PLC Schneider Electric berperan sebagai RTU yang mensimulasikan jaringan sub-transmisi dan beban.
+
+\item[b.] \textbf{\textit{Communication Network}:} Jaringan komunikasi yang menghubungkan \textit{field device} dengan pusat kendali. Standar IEC 61850 menggunakan protokol GOOSE (\textit{Generic Object Oriented Substation Events}) untuk pesan waktu-kritis dan MMS (\textit{Manufacturing Message Specification}) untuk data telemetri.
+
+\item[c.] \textbf{\textit{SCADA Master Station}:} Pusat pengumpulan dan penyimpanan data telemetri, penampil \textit{Single Line Diagram} (SLD) dinamis, dan antarmuka operator. Log \textit{Sequence of Events} (SOE) direkam di sini untuk keperluan audit.
+
+\item[d.] \textbf{\textit{Advanced Application Module} (\textit{OLS Engine}):} Modul perangkat lunak (\textit{Python-based}) yang menerima data telemetri \textit{real-time}, menjalankan \textit{solver} MILP, dan mengirimkan perintah \textit{trip/close} CB kembali ke PLC. Ini adalah komponen utama yang dikembangkan dalam proyek \textit{capstone} ini.
+\end{enumerate}
+
+\subsection{Alur Kerja Modul OLS dalam Siklus SCADA}
+\label{subsec:Alur_Kerja_Modul_OLS}
+
+Gambar \ref{fig:flowchart_scada} menunjukkan diagram alur (\textit{flowchart}) kerja modul OLS yang terintegrasi dalam siklus SCADA.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{gambar_2_4.png}
+    \caption{Alur kerja modul OLS dalam siklus SCADA.}
+    \label{fig:flowchart_scada}
+\end{figure}
+
+Siklus kerja modul OLS dapat dirangkum dalam empat fase utama:
+
+\begin{enumerate}
+\item \textbf{Fase 1 (Monitoring):} Modul membaca data telemetri secara periodik (100 - 500 ms) dan mendeteksi kondisi abnormal berdasarkan \textit{thresholding} frekuensi dan tegangan.
+
+\item \textbf{Fase 2 (Analisis dan Optimasi):} Setelah anomali terdeteksi, modul mengidentifikasi skenario kontingensi, menghitung defisit daya, dan menjalankan \textit{solver} MILP untuk menghasilkan keputusan pelepasan beban optimal.
+
+\item \textbf{Fase 3 (Eksekusi Kendali):} Perintah \textit{trip} CB dikirimkan ke PLC dan dieksekusi, setiap aksi dicatat dalam log SOE dengan cap waktu (\textit{timestamp}).
+
+\item \textbf{Fase 4 (Pemulihan):} Setelah frekuensi dan tegangan stabil, modul menjalankan algoritma pemulihan bertahap dan mengaktifkan kembali beban secara terurut.
+\end{enumerate}
+
+\subsection{Standar Komunikasi: IEC 61850 dan Modbus}
+\label{subsec:Standar_Komunikasi}
+
+Dua protokol komunikasi yang relevan dalam ekosistem Schneider Electric adalah \cite{Nazarov2019, IEC61850_2013}:
+
+\begin{enumerate}
+    \item[a.] \textbf{IEC 61850:} Standar internasional untuk komunikasi dan otomasi gardu induk/distribusi. Mendefinisikan model data (\textit{Logical Nodes}) dan protokol komunikasi (GOOSE, MMS, \textit{Sampled Values}) yang menjamin interoperabilitas antar vendor. Modul OLS akan mengonsumsi data telemetri dalam format \textit{Logical Node} standar (misalnya MMXU untuk pengukuran tegangan/arus, PTRC untuk indikasi proteksi).
+    
+    \item[b.] \textbf{Modbus TCP/RTU:} Protokol komunikasi industri yang lebih sederhana dan umum digunakan pada PLC Schneider. Dalam lingkungan laboratorium proyek ini, Modbus TCP digunakan sebagai antarmuka antara modul OLS Python dan PLC.
+\end{enumerate}
+
+\section{Metrik Kinerja dan Kriteria Keberhasilan}
+\label{sec:Metrik_Kinerja}
+
+Evaluasi kinerja modul OLS yang dikembangkan dilakukan berdasarkan tabel \ref{tab:metrik_kinerja}, yang sekaligus menjadi kriteria keberhasilan proyek.
+
+\begin{longtable}{|p{3cm}|p{7cm}|p{4cm}|}
+\caption{Metrik kinerja dan target keberhasilan modul OLS.}
+\label{tab:metrik_kinerja} \\
+\hline
+\textbf{Metrik} & \textbf{Definisi \& Formula} & \textbf{Target} \\ \hline
+\endfirsthead
+
+\multicolumn{3}{c}%
+{{\bfseries Tabel \thetable\ -- Lanjutan dari halaman sebelumnya}} \\
+\hline
+\textbf{Metrik} & \textbf{Definisi \& Formula} & \textbf{Target} \\ \hline
+\endhead
+
+\hline \multicolumn{3}{|r|}{{Berlanjut ke halaman berikutnya}} \\ \hline
+\endfoot
+
+\hline
+\endlastfoot
+
+Akurasi Pelepasan Beban (LS \textit{Accuracy}) & Selisih absolut antara daya yang dilepas algoritma dan defisit aktual, dinormalisasi: $\epsilon = |P_{shed} - \Delta P_{deficit}| / \Delta P_{deficit} \times 100\%$ & $\epsilon < 10\%$ \\ \hline
+Profil Tegangan & Persentase bus yang memenuhi batasan pasca-pelepasan & 100\% bus dalam 0.95 - 1.05 p.u. \\ \hline
+Waktu Komputasi & Waktu dari deteksi anomali hingga perintah \textit{trip} CB pertama dikirim & $< 5$ detik (target aspirasional $< 1$ detik) \\ \hline
+Kecepatan Pemulihan & Waktu total pemulihan vs. pemulihan manual: $\Delta t_{recovery} = t_{auto} - t_{manual}$ & Perbaikan $> 10\%$ lebih cepat dari manual \\ \hline
+\textit{Optimality Gap} & Gap $(f_{incumbent} - f^*) / f^* \times 100\%$ dengan $f^*$ adalah \textit{lower bound} LP relaxation & $< 1\%$ (\textit{solver} MILP) \\
+\end{longtable}
+
+Catatan: target waktu komputasi $< 5$ detik merupakan target operasional realistis berdasarkan profil gangguan yang ditangani, target $< 1$ detik merupakan target aspirasional yang bergantung pada skala jaringan yang disimulasikan. Kedua parameter ini bersifat tentatif dan dapat disesuaikan berdasarkan hasil pengujian awal.

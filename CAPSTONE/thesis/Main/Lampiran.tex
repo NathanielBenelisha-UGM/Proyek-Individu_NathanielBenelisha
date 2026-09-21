@@ -1,0 +1,23 @@
+\chapter*{\uppercase{LAMPIRAN}}
+\addcontentsline{toc}{chapter}{LAMPIRAN}
+\label{chap:LAMPIRAN}
+
+%% Tarik sedikit ke atas agar lebih rapat dengan judul
+\vspace{0cm} 
+
+\begin{center}
+    %% trim=kiri bawah kanan atas. 
+    %% Angka "2.5cm" di akhir berarti memotong margin atas PDF sebanyak 2,5 cm.
+    %% clip wajib ditulis agar bagian yang di-trim benar-benar disembunyikan.
+    \includegraphics[page=1, width=1\textwidth, trim=0 0 0 2.5cm, clip]{Lampiran_Dosen.pdf}
+\end{center}
+
+%% 2. Lanjutkan memasukkan HALAMAN 2 hingga akhir dari Lampiran Dosen (jika halamannya lebih dari 1)
+%% Jika Lampiran Dosen hanya 1 halaman, baris ini bisa dihapus/diberi komentar
+\includepdf[pages=2-, scale=0.85, pagecommand={}]{Lampiran_Dosen.pdf}
+
+%% 3. Lanjutkan dengan Lampiran Industri dan POC seperti biasa (otomatis di halaman baru)
+\includepdf[pages=-, scale=0.7, pagecommand={}]{Lampiran_Industri.pdf}
+\includepdf[pages=-, scale=0.9, pagecommand={}]{Lampiran_POC.pdf}
+
+

@@ -1,0 +1,109 @@
+% \textcolor{black}{Pada bagian ini, apabila diperlukan Anda dapat menyertakan simulasi pengantar. Sebagai contoh dalam perancangan perangkat keras, peserta dapat menyampaikan simulasi perangkat keras yang di desain dengan menggunakan perangkat lunak bawaan (\textit{tools}) misalkan Orchad/PSpice untuk mensimulasikan bagian-bagian dari keseluruhan desain. Jika mensimulasikan operasi sistem tenaga listrik, peserta bisa menggunakan perangkat lunak yang biasa dipakai misalkan Digsilent, ETAP dan lain-lain. Jika model yang dihasilkan berupa \textit{model multi machines} yang terinterkoneksi dengan beban, maka Anda dapat mendesain simulasi berdasarkan perangkat lunak (misalnya MATLAB) menjadi bagian-bagian kecil dari sistem tersebut.}
+
+Simulasi pendahuluan ini mencakup pengujian terhadap logika kontrol PLC, komunikasi jaringan industri, eksekusi algoritma optimasi, serta visualisasi antarmuka sistem secara keseluruhan. Proyek \textit{SCADA-Based Optimal Load Shedding and Recovery} pada implementasi akhirnya akan menggunakan perangkat keras fisik berupa PLC Modicon M221, Modul \textit{Relay}, MCB, serta lampu indikator beban sebagai \textit{Hardware-in-the-Loop} (HIL). 
+Namun, pada tahap simulasi pendahuluan ini, pengujian murni dilakukan melalui pendekatan \textit{Software-in-the-Loop} (SIL) menggunakan simulator bawaan dari perangkat lunak \textbf{Schneider EcoStruxure Machine Expert -- Basic}. Pendekatan ini memungkinkan pengujian dasar seperti validasi logika \textit{fail-safe}, komunikasi pertukaran \textit{Holding Register} dan \textit{Coil} melalui Modbus TCP/IP, serta respons komputasi \textit{solver} tanpa perlu bergantung pada ketersediaan perangkat keras fisik. Hal ini mempermudah proses validasi sistem (\textit{debugging}) secara komprehensif sebelum diimplementasikan secara langsung ke dalam panel kelistrikan fisik.
+
+\section{Simulasi Logika Virtual PLC (\textit{Ladder Diagram})}
+\label{sec:Simulasi_Logika_PLC}
+Pada simulasi ini, dilakukan percobaan eksekusi program \textit{Ladder Diagram} menggunakan simulator \textit{built-in} dari EcoStruxure Machine Expert. Simulasi ini bertujuan untuk memvalidasi mekanisme \textit{fail-safe} proteksi beban. Pada kondisi jaringan normal, kontak \textit{Normally Closed} (NC) pada perangkat lunak PLC akan mengalirkan arus virtual menuju relai beban (ditandai dengan indikator aliran berwarna hijau pada perangkat lunak). 
+Ketika \textit{SCADA Master} mengirimkan instruksi \textit{Under-Frequency Load Shedding} (UFLS) dengan menginjeksi nilai logika 1 ke memori register \texttt{\%M21}, kontak NC tersebut akan terputus seketika. Hasil simulasi ini membuktikan bahwa mekanisme proteksi pemutusan beban otomatis dapat tereksekusi dengan benar di tingkat dasar (\textit{field layer}). Hasil simulasi dalam kondisi normal dan kondisi \textit{trip} (UFLS aktif) dapat dilihat secara berturut-turut pada Gambar~\ref{fig:simulasi_plc_normal} dan Gambar~\ref{fig:simulasi_plc_trip}.
+% ====================================================================
+% PANDUAN GAMBAR 1: 
+% Masukkan Screenshot dari aplikasi Schneider EcoStruxure saat di-"Play" (Simulator mode).
+% Kondisi: Normal (belum ada trip), pastikan Rung berwarna hijau (arus tembus).
+% Hapus baris \framebox dan aktifkan (uncomment) baris \includegraphics
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{gambar_10_1.png}
+    \caption{Simulasi Logika \textit{Ladder Diagram} Virtual PLC (Kondisi Normal)}
+    \label{fig:simulasi_plc_normal}
+\end{figure}
+% ====================================================================
+% PANDUAN GAMBAR 2: 
+% Masukkan Screenshot dari aplikasi Schneider EcoStruxure.
+% Kondisi: Lakukan "Force to 1" pada coil UFLS (misal %M21) sehingga Rung terputus.
+% Hapus baris \framebox dan aktifkan (uncomment) baris \includegraphics
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{gambar_10_2.png}
+    \caption{Simulasi Logika \textit{Ladder Diagram} Virtual PLC (Kondisi Pemutusan Beban)}
+    \label{fig:simulasi_plc_trip}
+\end{figure}
+\section{Simulasi Komunikasi \textit{Physics Engine} (Modbus TCP)}
+\label{sec:Simulasi_Komunikasi}
+Simulasi ini bertujuan untuk memastikan bahwa \textit{Physics Engine} berbasis Python (\texttt{load.py}) mampu melakukan komunikasi baca-tulis (\textit{read/write}) lintas platform menuju memori Modbus TCP/IP pada Virtual PLC secara sinkron dan \textit{real-time} dengan frekuensi 10 Hz. Simulasi transmisi data dilakukan dengan menyuntikkan data beban yang berfluktuasi secara dinamis ke dalam \textit{Holding Register} \texttt{\%MW0} hingga \texttt{\%MW11}.
+Keberhasilan transmisi data ini ditandai dengan perubahan angka register secara konstan pada menu \textit{Animation Table} di perangkat lunak Schneider. Pengujian ini memvalidasi bahwa jembatan komunikasi antara lingkungan matematika diferensial dan lingkungan \textit{controller} industri berjalan dengan stabil tanpa \textit{bottleneck} atau \textit{delay} paket jaringan yang berarti sebagaimana ditunjukkan pada Gambar~\ref{fig:simulasi_modbus_animation_table} dan Gambar~\ref{fig:simulasi_modbus_terminal}.
+% ====================================================================
+% PANDUAN GAMBAR 3: 
+% Masukkan Screenshot gabungan/bersebelahan:
+% Kiri/Atas: Terminal CMD yang menampilkan log print load.py (sedang update data)
+% Kanan/Bawah: Menu "Animation Table" di Schneider yang menunjukkan nilai angka %MW0 bergerak.
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_3.jpeg}
+    \caption{Simulasi Transmisi Data \textit{Physics Engine} via Modbus TCP (\textit{Animation Table})}
+    \label{fig:simulasi_modbus_animation_table}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_4.png}
+    \caption{Simulasi Transmisi Data Dinamis \textit{Physics Engine} via Modbus TCP (Terminal)}
+    \label{fig:simulasi_modbus_terminal}
+\end{figure}
+\section{Simulasi Algoritma Optimasi Pelepasan Beban (MILP)}
+\label{sec:Simulasi_MILP}
+Pengujian fungsionalitas ini berfokus pada validasi sistem kecerdasan terpusat dari \textit{SCADA Backend} (\texttt{app.py}). Skenario diuji dengan melakukan simulasi pelepasan paksa (\textit{trip}) secara virtual pada salah satu unit pembangkit kapasitas besar guna memicu parameter \textit{Rate of Change of Frequency} (RoCoF) bernilai negatif.
+Ketika pembacaan sensor \textit{Physics Engine} mendeteksi bahwa frekuensi transmisi anjlok hingga menembus ambang batas (\textit{threshold}) kritis $\leq 49{.}0$ Hz, layar log terminal pada Gambar \ref{fig:simulasi_milp} membuktikan bahwa \textit{SCADA Backend} secara mandiri berhasil memformulasikan persamaan matematis seketika dan memanggil \textit{solver} analitik \textit{Mixed-Integer Linear Programming} (MILP). Keluaran ini menampilkan kombinasi interupsi spesifik pada beban prioritas non-esensial terbaik dalam hitungan milidetik.
+% ====================================================================
+% PANDUAN GAMBAR 4: 
+% Masukkan Screenshot Terminal CMD ketika app.py sedang berjalan.
+% Cari bagian tulisan log saat UFLS terjadi (misalnya ada tulisan "MILP Solver Execution..." atau "Shedding loads: L101, L201").
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_5.png}
+    \caption{Simulasi Kecepatan Kalkulasi Keputusan Algoritma UFLS MILP}
+    \label{fig:simulasi_milp}
+\end{figure}
+\section{Simulasi Antarmuka Web HMI (\textit{Dashboard})}
+\label{sec:Simulasi_HMI}
+
+Antarmuka layar kendali utama (\textit{Web Human-Machine Interface}) diuji untuk memvalidasi proses penerjemahan data telemetri yang di-\textit{streaming} melalui protokol asinkron WebSocket (\textit{Socket.IO}). Parameter pengujian mencakup respons kinerja \textit{render} grafik transien beresolusi tinggi dan kelancaran \textit{gauge meter}. Tampilan pemantauan dievaluasi pada dua paradigma keadaan sistem, yaitu fase tunak normal yang ditunjukkan pada Gambar~\ref{fig:simulasi_hmi_normal} dan fase darurat kontingensi frekuensi yang ditunjukkan pada Gambar~\ref{fig:simulasi_hmi_trip}. Transisi elemen antarmuka berupa kedipan warna merah muda pada jalur sirkuit terdampak serta pencatatan historis insiden pada menu \textit{Alarm Log} menunjukkan bahwa kapabilitas \textit{situational awareness} bagi pengguna \textit{Control Room} dapat berfungsi secara responsif.
+
+% ====================================================================
+% PANDUAN GAMBAR 5: 
+% Masukkan Screenshot antarmuka Web HMI (di browser) saat kondisi tenang.
+% Semua grafik stabil (frekuensi lurus 50Hz), jalur SLD warna hijau semua.
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_6.png}
+    \caption{Simulasi Render Visual Antarmuka HMI pada Fase Normal}
+    \label{fig:simulasi_hmi_normal}
+\end{figure}
+% ====================================================================
+% PANDUAN GAMBAR 6: 
+% Masukkan Screenshot antarmuka Web HMI sesaat setelah insiden generator mati.
+% Tunjukkan grafik frekuensi menukik tajam, ada kotak jalur sub-transmisi yang menyala merah (terputus UFLS), dan ada log alarm.
+% ====================================================================
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_7.png}
+    \caption{Simulasi Render Visual Antarmuka HMI pada Fase Kontingensi}
+    \label{fig:simulasi_hmi_trip}
+\end{figure}
+
+\section{Validasi Sinkronisasi Waktu Nyata (\textit{Real-Time Trace})}
+\label{sec:Simulasi_Trace}
+Untuk memverifikasi bahwa eksekusi pemutusan beban (\textit{load shedding}) pada layar HMI benar-benar tersinkronisasi tanpa latensi yang berarti dengan lapisan perangkat keras virtual, dilakukan penelusuran sinyal dinamis (\textit{signal tracing}) menggunakan instrumen \textit{Trace} dari Schneider EcoStruxure. 
+Gambar~\ref{fig:simulasi_trace} merekam grafik historis penurunan nilai dari \textit{Holding Registers} beban (\texttt{\%MW0} hingga \texttt{\%MW7}). Sesaat setelah insiden generator \textit{trip} dan kondisi \textit{under-frequency} menyentuh ambang batas, algoritma MILP aktif dan mengeksekusi UFLS. Grafik \textit{trace} dengan jelas memperlihatkan beberapa grafik warna beban jatuh menukik seketika ke nilai nol secara bersamaan. Penurunan instan ini terekam persis selaras dengan indikator visual terputusnya sirkuit pada layar \textit{Dashboard} HMI, yang memvalidasi bahwa transmisi komando mitigasi dari server Python kembali ke PLC bekerja secara sangat reaktif dan andal.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{gambar_10_8.jpeg}
+    \caption{Penelusuran Sinyal (\textit{Trace}) Register Modbus Beban (\texttt{\%MW}) Saat Eksekusi UFLS}
+    \label{fig:simulasi_trace}
+\end{figure}

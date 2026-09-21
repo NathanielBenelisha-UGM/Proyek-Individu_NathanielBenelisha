@@ -1,0 +1,57 @@
+Landasan konseptual dan urgensi pengembangan modul cerdas berbasis \textit{Supervisory Control and Data Acquisition} (SCADA) untuk optimasi pelepasan serta pemulihan beban pada sistem tenaga listrik dijabarkan sebagai dasar perancangan proyek. Pembahasan diawali dengan kajian mengenai tantangan dalam menjaga keandalan pasokan listrik di tengah meningkatnya penetrasi Energi Baru Terbarukan (EBT). Selanjutnya, permasalahan umum diterjemahkan menjadi tantangan teknis yang lebih spesifik, disertai identifikasi berbagai kendala perancangan yang mencakup aspek ekonomi, keselamatan, dan regulasi. Sebagai penutup, dipaparkan keterkaitan kompetensi dari berbagai mata kuliah yang menjadi fondasi akademis dalam pengembangan proyek \textit{capstone} ini.
+
+\section{Latar Belakang}
+\label{sec:Latar_Belakang}
+
+Keandalan pasokan listrik merupakan prasyarat fundamental bagi pembangunan ekonomi dan kesejahteraan masyarakat. Gangguan pada sistem tenaga listrik terbukti menekan produktivitas total faktor (\textit{Total Factor Productivity}/TFP) perusahaan hingga sekitar 11\% per episode pemadaman \cite{Zambrano2026} dan memberikan dampak sistemik terhadap perekonomian nasional ketika durasi gangguan melebihi ambang kritis \cite{Nduhuura2024}. Tantangan ini kini semakin kompleks seiring masifnya penetrasi Energi Baru dan Terbarukan (EBT) ke jaringan sub-transmisi dan distribusi. Pembangkit berbasis inverter, seperti surya fotovoltaik dan angin tidak menyumbangkan inersia rotasi seperti generator sinkron konvensional, sehingga nilai konstanta inersia sistem (H) menurun drastis dan laju perubahan frekuensi (\textit{Rate of Change of Frequency}/RoCoF) menjadi semakin cepat saat terjadi gangguan \cite{Drhorhi2024, Saleem2024}.
+
+Indonesia secara langsung menghadapi tekanan transisi ini. RUPTL 2025-2034 PLN menargetkan penambahan 69.5 GW kapasitas pembangkitan, dengan 61\% berasal dari EBT \cite{PLN2025}. Di sisi lain, per tahun 2023 bauran EBT nasional baru mencapai 13.1\%, sementara infrastruktur \textit{Supervisory Control and Data Acquisition} (SCADA) yang ada termasuk Pusat Pengendali Beban Jamali yang melayani 160 juta penduduk masih dalam tahap modernisasi untuk mengakomodasi karakteristik pembangkitan yang lebih intermiten \cite{IEEFA2024, Ember2025, ETP2023}. Kondisi ini memperbesar risiko pemadaman beruntun (\textit{cascading failure}). Insiden di Australia Selatan (2016) dan Inggris (2019) membuktikan bahwa inersia sistem yang rendah dapat mengubah gangguan lokal menjadi kolaps sistem yang masif \cite{Frontiers2022}.
+
+Mekanisme pertahanan yang lazim digunakan saat ini, yaitu skema \textit{Under Frequency Load Shedding} (UFLS) berbasis relai statis bekerja berdasarkan ambang batas frekuensi yang diatur dan tidak dapat beradaptasi terhadap kondisi operasi yang berubah-ubah \cite{Elsaadany2025}. Akibatnya, skema ini rentan terhadap dua kegagalan sekaligus, antara lain kelebihan pelepasan beban (\textit{overshedding}) yang membuang energi dan merugikan pelanggan secara tidak perlu, serta kekurangan pelepasan beban (\textit{undershedding}) yang gagal menghentikan penurunan frekuensi \cite{Arani2021}. Kedua kondisi tersebut meningkatkan biaya energi tak tersalurkan (\textit{Cost of Energy Not Served}/CENS) dan menurunkan kepatuhan terhadap \textit{Service Level Agreement} (SLA).
+
+Lebih lanjut, proses pemulihan pasca-gangguan yang umumnya masih dilakukan secara manual dan lambat meningkatkan risiko kegagalan beruntun saat beban diaktifkan kembali pada jaringan yang belum stabil. Oleh karena itu, diperlukan modul cerdas berbasis SCADA yang mampu menentukan jumlah beban minimal yang perlu dilepas secara optimal dan menyusun urutan pemulihan yang aman melalui optimasi matematis \textit{real-time} menggantikan pendekatan statis dan reaktif yang ada \cite{Mohan2020}.
+
+\section{Penjabaran Masalah Umum Menjadi Masalah Teknis}
+\label{sec:Penjabaran_Masalah_Umum_Menjadi_Masalah_Teknis}
+
+Permasalahan di atas dapat dijabarkan menjadi empat tantangan teknis yang saling terkait. Pertama, ketidakseimbangan daya akibat gangguan kontingensi pembangkit maupun penyulang harus dideteksi secara cepat menggunakan data telemetri RoCoF dan deviasi tegangan dari SCADA lalu direspons sebelum frekuensi melampaui batas kritis. 
+
+Kedua, penentuan beban minimum yang perlu dilepas mensyaratkan penyelesaian persoalan aliran daya non-linier dengan batasan tegangan (0.95 - 1.05 p.u.) dan kapasitas termal saluran, yang bila dikombinasikan dengan variabel keputusan biner (\textit{on/off circuit breaker}) membentuk persoalan \textit{Mixed-Integer Linear Programming} (MILP) berkomputasi tinggi yang harus diselesaikan dalam orde detik.
+
+Ketiga, fungsi objektif optimasi harus mengintegrasikan prioritas beban (kritis: fasilitas kesehatan; semi-kritis: industri; non-kritis: residensial) agar keputusan pelepasan memperhitungkan dampak sosial dan ekonomi, bukan semata besaran daya. Keempat, algoritma pemulihan harus menjadwalkan pengaktifan kembali beban secara bertahap dengan memverifikasi stabilitas frekuensi dan tegangan di setiap langkah, mencegah terjadinya lonjakan yang memicu pemadaman lanjutan.
+
+Persoalan-persoalan teknis tersebut melahirkan sejumlah kendala perancangan, antara lain fungsionalitas (waktu komputasi harus memenuhi syarat operasional \textit{real-time} SCADA), interoperabilitas (modul harus kompatibel dengan ekosistem \textit{Programmable Logic Controller} (PLC) dan perangkat Schneider Electric sebagai mitra), keselamatan (mekanisme \textit{fail-safe} wajib ada agar kegagalan modul tidak memperparah kondisi jaringan), standar (solusi harus mengacu pada UU Ketenagalistrikan No. 30/2009 dan standar IEC 61850/IEEE), ekonomi (desain harus dapat menunjukkan penghematan CENS yang terukur), serta sosial (prioritas beban kritis masyarakat harus tercermin secara eksplisit dalam model).
+
+\section{Kendala-Kendala yang Perlu Dipertimbangkan}
+\label{sec:Kendala_Kendala_yang_Perlu_Dipertimbangkan}
+
+Tujuan solusi proyek ini adalah modul optimasi matematis \textit{real-time} yang menentukan strategi pelepasan beban minimal dan urutan pemulihan aman berbasis SCADA. Agar solusi tidak hanya unggul secara teknis tetapi juga layak diimplementasikan di industri, beberapa kategori kendala berikut wajib dipertimbangkan. Kategori tersebut, antara lain:
+
+\begin{enumerate}
+    \item[a.] \textbf{Ekonomi}: Pengembangan harus sesuai anggaran mitra (Schneider Electric), mencakup perangkat lunak, perangkat keras uji, dan tenaga ahli. Solusi wajib menunjukkan penghematan CENS yang terukur sebagai justifikasi investasi.
+    \item[b.] \textbf{Keselamatan dan Keandalan}: Setiap kegagalan komunikasi atau kesalahan komputasi harus memicu mode \textit{fail-safe} (kembali ke proteksi manual), dan setiap keputusan algoritma harus tercatat dalam log \textit{Sequence of Events} (SOE) untuk auditabilitas.
+    \item[c.] \textbf{Hukum, Regulasi, dan Standar}: Solusi harus kompatibel dengan UU Ketenagalistrikan No. 30 Tahun 2009, Peraturan Menteri ESDM terkait mutu tenaga listrik, serta standar teknis IEC 61850 dan IEEE terkait interoperabilitas sistem proteksi.
+    \item[d.] \textbf{Sosial}: Model prioritas beban harus secara eksplisit melindungi fasilitas vital (rumah sakit, pusat data), dan antarmuka \textit{Graphical User Interface} (GUI) harus dapat dioperasikan secara intuitif oleh operator dengan berbagai tingkat keahlian teknis.
+    \item[e.] \textbf{Fungsionalitas dan Jadwal}: Algoritma optimasi wajib menghasilkan solusi dalam batasan waktu operasional SCADA (orde detik), yang sekaligus membatasi pilihan metode. Lingkup proyek harus dikelola cermat mengingat keterbatasan durasi \textit{Capstone}.
+\end{enumerate}
+
+\section{Mata Kuliah dan Kemampuan yang Mendukung}
+\label{sec:Mata_Kuliah_dan_Kemampuan_yang_Mendukung}
+
+Mata kuliah yang secara langsung mendukung pelaksanaan proyek \textit{Capstone} ini beserta kontribusinya adalah:
+
+\begin{enumerate}
+\item[a.] \textbf{Analisis Sistem Tenaga}: Fondasi utama proyek untuk pemodelan jaringan sub-transmisi bertopologi \textit{mesh}, analisis aliran daya (Newton-Raphson/Gauss-Seidel), analisis kontingensi N-1, serta karakteristik stabilitas tegangan dan frekuensi sebagai basis batasan operasional algoritma.
+    \item[b.] \textbf{Teknik Optimisasi}: Menyediakan kerangka matematis inti untuk formulasi \textit{Mixed Integer Linear Programming} (MILP) untuk persoalan pelepasan beban optimal, konsep optimalitas, dualitas, dan analisis sensitivitas untuk validasi solusi.
+    \item[c.] \textbf{Teknik Kendali \& Perancangan Sistem Kendali Modern}: Dasar arsitektur kontrol \textit{closed-loop} SCADA untuk pembacaan sinyal sensor (frekuensi/tegangan), logika aktuasi \textit{circuit breaker}, representasi \textit{state-space}, dan analisis kestabilan dinamika frekuensi.
+    \item[d.] \textbf{Teknik Proteksi}: Pemahaman filosofi UFLS, koordinasi relai frekuensi rendah, dan batasan skema konvensional yang esensial untuk memastikan modul baru tidak berinterferensi negatif dengan proteksi eksisting.
+    \item[e.] \textbf{Operasi Sistem Tenaga Listrik}: Prosedur \textit{dispatch}, manajemen cadangan, dan prosedur pemulihan sistem (\textit{restoration}) menjadi acuan perancangan algoritma pemulihan otomatis yang lebih terstruktur dan cepat.
+    \item[f.] \textbf{Teknik Tenaga Listrik}: Pemodelan komponen jaringan (generator, transformator, saluran, beban) sebagai fondasi pembangunan representasi jaringan akurat dalam simulator.
+    \item[g.] \textbf{Persamaan Diferensial \& Metode Numeris}: Pemodelan \textit{swing equation} (dinamika frekuensi pasca-gangguan) dan penyelesaian iteratif aliran daya non-linier (Newton-Raphson) serta algoritma \textit{branch-and-bound} untuk MILP.
+    \item[h.] \textbf{Mesin Listrik 1 \& 2}: Model dinamis generator sinkron dan konstanta inersia H sebagai parameter kritis dalam \textit{swing equation} dan pemodelan respons pembangkit terhadap gangguan.
+    \item[i.] \textbf{Isyarat dan Sistem \& Teknik Pengolahan Isyarat Digital}: Pemrosesan data telemetri SCADA yang mengandung derau untuk \textit{filtering} digital dan estimasi parameter untuk memastikan masukan algoritma bersih dan representatif.
+    \item[j.] \textbf{Pemrograman Dasar \& Algoritma dan Struktur Data}: Implementasi \textit{solver} optimasi dan modul kontrol dalam Python (NumPy, SciPy, PuLP/Pyomo/CVXPY) untuk desain struktur data efisien untuk memenuhi batasan waktu komputasi \textit{real-time}.
+    \item[k.] \textbf{Jaringan dan Komunikasi Data}: Perancangan arsitektur komunikasi antara modul optimasi, server SCADA, dan PLC Schneider Electric, termasuk protokol komunikasi industri yang relevan (Modbus, OPC-UA).
+    \item[l.] \textbf{Pengukuran dan Instrumentasi}: Pemahaman akurasi dan keterbatasan sensor besaran listrik (tegangan, arus, frekuensi, daya) yang harus diperhitungkan agar keputusan algoritma tidak dipengaruhi kesalahan pengukuran.
+    \item[m.] \textbf{Keandalan Sistem Tenaga Listrik \& Manajemen Energi Keberlanjutan}: Perspektif keandalan sistem (\textit{System Average Interruption Duration Index}/SAIDI \& \textit{System Average Interruption Frequency Index}/SAIFI) dan analisis biaya-manfaat pengurangan CENS sebagai justifikasi ekonomis dan keberlanjutan solusi yang dikembangkan.
+\end{enumerate}
