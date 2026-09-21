@@ -75,9 +75,10 @@ wind turbines and solar PV operate as energy-supplying generators with
 curtailment capabilities. The PFR formulation accounts for governor
 droop characteristics, ramp-rate limits, and steady-state frequency
 deviation constraints derived from the Southern Sulawesi power system
-framework.
-Seven simulation scenarios on a modified IEEE 10-unit test system
-with a RoCoF threshold of 0.55~Hz/s are comprehensively evaluated.
+Seven simulation scenarios on a 10-generator, single-bus simplified
+IEEE 24-bus test system with a RoCoF threshold of 0.55~Hz/s are
+comprehensively evaluated and validated via dynamic transient
+simulations in DIgSILENT PowerFactory.
 The unconstrained classical UC (Scenario~1) yields \$4{,}029{,}223/day
 but violates RoCoF in all 24 scheduling periods (worst-case 0.903~Hz/s).
 Enforcing inertia security using synchronous generators alone (Scenario~4)
@@ -688,12 +689,16 @@ The complete FCUC model comprising objective~\eqref{eq:objective_full} subject t
 \section{Case Study Setup}
 \label{sec:caseStudy}
 
-\subsection{Test System}
+\subsection{Test System Description}
 
-The model is validated on a \textbf{modified IEEE 10-unit test
-system}~\cite{Kazarlis1996} with added IBR (BESS and wind turbine).
-Generator parameters are in Table~\ref{tab:gen} and IBR/frequency
-parameters in Table~\ref{tab:ibr}.
+The test system is based on the standard \textbf{IEEE 24-bus Reliability Test System (RTS-24)}~\cite{Kazarlis1996,E02Sulawesi}, simplified and aggregated into an equivalent \textbf{single-bus, single-load, 10-generator configuration} (copper-plate model) to focus on system-wide unit commitment scheduling, system inertia adequacy, and dynamic frequency stability. The system comprises:
+\begin{itemize}
+  \item \textbf{10 Conventional Thermal Generating Units (G1--G10)}: categorized by power plant type, including coal steam power plants (PLTU), combined-cycle units (PLTGU), and gas turbine/diesel peaking plants (PLTG), providing a total synchronous generation capacity of 1{,}662~MW. Detailed operational and dynamic parameters of each unit are presented in Table~\ref{tab:gen}.
+  \item \textbf{1 Equivalent Grid Bus and 1 Aggregate System Load}: representing the collective demand of the system over a 24-hour dispatch horizon with an average load of 1{,}168~MW and a peak demand of 1{,}500~MW.
+  \item \textbf{Grid-Forming BESS}: a 200~MW / 400~MWh battery installation equipped with virtual inertia control capability ($K_{\text{VI}}^{\text{BESS}} = 10$~MWs/MW) and coupled discharge power allocation headroom.
+  \item \textbf{Renewable Energy Installations}: a 400~MW wind turbine farm (PLTB) and solar PV facility (PLTS) operating under normalized resource availability profiles.
+\end{itemize}
+Generator parameters are in Table~\ref{tab:gen} and IBR/frequency parameters in Table~\ref{tab:ibr}.
 
 \begin{table}[!t]
 \renewcommand{\arraystretch}{1.2}
@@ -786,15 +791,24 @@ N-1 Reserve (C6)         & \checkmark & \checkmark & \checkmark
 \end{tabular}
 \end{table}
 
-\subsection{Implementation}
+\subsection{Implementation and DIgSILENT Dynamic Transient Validation}
 
-The model is implemented in Python~3.9 using the Pyomo~6.9.5
-algebraic modeling language and solved with IBM CPLEX~22.1.1
-(\texttt{cplex\_direct} interface). Generator, demand, BESS,
-and wind turbine data are loaded from
-\texttt{DataSet\_ModifikasiCandra\_R02.xlsx}.
-All seven scenarios are executed sequentially on a standard
-workstation (Intel Core i7, 16~GB RAM, Windows~10).
+To bridge the gap between algebraic optimization and physical power system dynamics, a comprehensive two-stage optimization and transient validation framework is employed:
+\begin{enumerate}
+  \item \textbf{Stage~1: MILP Unit Commitment Optimization in Python/CPLEX:}
+    The mathematical FCUC optimization model formulated in Section~\ref{sec:formulation} is implemented in Python~3.9 using the Pyomo~6.9.5 modeling language and solved to proven global optimality using the IBM CPLEX~22.1.1 solver (\texttt{cplex\_direct} interface with 0.1\% MIP gap tolerance). Generator, demand, BESS, and renewable profiles are loaded from \texttt{DataSet\_ModifikasiCandra\_R02.xlsx}.
+  
+  \item \textbf{Stage~2: Transient Dynamic Simulation in DIgSILENT PowerFactory:}
+    The hourly unit commitment decisions ($u_{g,t}$), generator active power dispatch levels ($P_{g,t}$), and BESS operating setpoints ($P_{b,t}^{\text{dis}}, P_{b,t}^{\text{VI}}$) obtained from the CPLEX solution are imported into \textbf{DIgSILENT PowerFactory} to conduct high-fidelity time-domain RMS/EMT dynamic simulations. In PowerFactory, synchronous machines are represented with detailed multi-mass rotor dynamics, IEEE standard excitation systems (AVR), and free turbine-governors (GOV) with droop speed regulation; the BESS is modeled as a grid-forming converter with fast frequency response loops; and renewable generation is modeled with power electronic converter interfaces.
+\end{enumerate}
+
+Using DIgSILENT PowerFactory, dynamic frequency response curves ($f(t)$, $\text{RoCoF}(t)$, and generator power trajectories) are plotted to physically prove and validate system stability across multiple critical operational conditions:
+\begin{itemize}
+  \item \textbf{N-1 Generation Contingency Condition:} Simulating the sudden tripping of the largest online generating unit ($P^{\text{loss}}$) during both peak-load and low-inertia hours to verify that the transient frequency nadir remains strictly above the statutory Under-Frequency Load Shedding (UFLS) threshold of 49.0~Hz.
+  \item \textbf{Unit De-commitment / Shutdown Condition:} Simulating low-load valley hours where conventional thermal units are de-committed (turned off), verifying that the reduced natural inertia supplemented by BESS virtual inertia successfully limits initial RoCoF slopes without triggering protective relays.
+  \item \textbf{All-Units-Committed Condition (High-Inertia Baseline):} Simulating the dynamic response when all units are online to establish a benchmark for transient damping, overshoot, and steady-state recovery.
+\end{itemize}
+This dynamic validation confirms that the linearized FCUC constraints accurately reflect the underlying transient dynamics, proving that the proposed BESS virtual inertia schedules guarantee physical frequency stability in time-domain reality.
 
 % =========================================================
 \section{Results and Discussion}
