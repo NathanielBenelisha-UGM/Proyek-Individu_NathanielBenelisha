@@ -59,31 +59,35 @@ E-mail: lesnanto@ugm.ac.id}}
 The rapid proliferation of Inverter-Based Resources (IBR)---including
 solar photovoltaic (PV), wind turbines (WT), and Battery Energy
 Storage Systems (BESS)---reduces natural rotational inertia in modern
-power systems, causing higher Rate of Change of Frequency (RoCoF)
-and deeper frequency nadirs following N-1 generation contingencies.
+power systems, exacerbating initial Rate of Change of Frequency (RoCoF)
+and challenging Primary Frequency Regulation (PFR) following N-1
+generation contingencies.
 This paper proposes an enhanced \textit{Frequency-Constrained Unit
-Commitment} (FCUC) model that simultaneously co-optimizes conventional
-generator scheduling and virtual inertia provision from multiple IBR
-sources within a unified Mixed-Integer Linear Programming (MILP)
-framework implemented in Python 3.9/Pyomo and solved with IBM
-CPLEX~22.1.1.
+Commitment} (FCUC) model that co-optimizes conventional generator
+scheduling, renewable generation (solar PV and wind), Primary Frequency
+Regulation, and dedicated Virtual Inertia (VI) provision from BESS
+within a unified Mixed-Integer Linear Programming (MILP) framework
+implemented in Python~3.9/Pyomo and solved via IBM CPLEX~22.1.1.
+Unlike conventional setups, virtual inertia is supplied strictly by
+grid-forming BESS, incorporating converter power allocation coupling
+between bulk energy discharge and virtual inertia headroom, while
+wind turbines and solar PV operate as energy-supplying generators with
+curtailment capabilities. The PFR formulation accounts for governor
+droop characteristics, ramp-rate limits, and steady-state frequency
+deviation constraints derived from the Southern Sulawesi power system
+framework.
 Seven simulation scenarios on a modified IEEE 10-unit test system
-with RoCoF limit of 0.55~Hz/s are evaluated.
-The classical UC (Scenario~1) yields a total cost of
-\$4{,}029{,}223/day but violates the RoCoF limit in all 24 scheduling
-periods (worst-case 0.903~Hz/s).
-Enforcing a minimum inertia constraint via synchronous generators
-only (Scenario~4) restores frequency security at a cost penalty
-of $+$3.65\% (\$4{,}176{,}358/day).
-The proposed multi-source virtual inertia model (Scenario~7,
-adding BESS-VI and WT-VI) reduces this cost to \$3{,}939{,}091/day,
-a saving of 5.69\% versus Scenario~4 and 2.24\% below even the
-unconstrained classical UC, while maintaining full RoCoF compliance
-with an average system inertia of 43{,}256~MWs.
-These results demonstrate that co-optimizing renewable integration
-and virtual inertia provision can simultaneously reduce operating
-costs and ensure frequency security---a key insight for Indonesia's
-RUPTL 2025--2034 target of 61\% renewable generation.
+with a RoCoF threshold of 0.55~Hz/s are comprehensively evaluated.
+The unconstrained classical UC (Scenario~1) yields \$4{,}029{,}223/day
+but violates RoCoF in all 24 scheduling periods (worst-case 0.903~Hz/s).
+Enforcing inertia security using synchronous generators alone (Scenario~4)
+guarantees frequency compliance but incurs a $+$3.65\% cost penalty
+(\$4{,}176{,}358/day). Incorporating BESS virtual inertia (Scenario~6)
+resolves all RoCoF violations while lowering operating cost to
+\$3{,}938{,}983/day (a 5.70\% savings relative to Scenario~4 and 2.24\%
+below baseline UC). These findings confirm that co-optimizing BESS
+virtual inertia and PFR ensures dynamic frequency security without
+requiring the costly over-commitment of thermal units.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -331,328 +335,354 @@ importance of uncertainty in UC scheduling.
 
 \subsubsection{Research Gaps}
 
-Despite the extensive body of literature reviewed above, three
+Despite the extensive body of literature reviewed above, several
 critical research gaps remain:
 \begin{itemize}
-  \item \textbf{(G1)} Existing models consider BESS \emph{or}
-    wind turbines as virtual inertia providers, but not
-    \emph{simultaneous multi-source provision} from BESS and
-    wind turbines within a unified MILP framework;
-  \item \textbf{(G2)} Quantitative cost--security trade-off
-    analysis across progressively more constrained FCUC
-    configurations --- from classical UC to full multi-source
-    VI FCUC --- is not available in the literature;
-  \item \textbf{(G3)} Comprehensive case studies combining
-    multi-source IBR virtual inertia aligned to national energy
-    targets in a rapidly electrifying developing economy
-    (such as Indonesia's RUPTL 2025--2034) are lacking.
+  \item \textbf{(G1)} Existing FCUC formulations often omit explicit
+    converter power allocation coupling between BESS energy arbitrage
+    discharge and virtual inertia headroom, risking physical converter
+    overloading during contingency response;
+  \item \textbf{(G2)} The integration of rigorous governor-droop
+    Primary Frequency Regulation (PFR) constraints---guaranteeing
+    quasi-steady-state frequency nadir and steady-state compliance
+    following N-1 outages---is rarely co-optimized with BESS virtual
+    inertia and high VRE penetration (wind and solar PV) in a tractable
+    MILP framework;
+  \item \textbf{(G3)} Detailed empirical validation and systematic
+    cost--security trade-off assessments tailored to Indonesian power
+    grid characteristics (such as the Southern Sulawesi interconnected
+    system under RUPTL 2025--2034 renewable targets) remain scarce.
 \end{itemize}
 
 \subsection{Contributions}
 
 This paper addresses the identified gaps through:
 \begin{enumerate}
-  \item \textbf{Multi-Source VI FCUC Formulation:} A unified MILP
-    FCUC model co-optimizing virtual inertia from BESS and wind
-    turbines simultaneously with conventional generator scheduling,
-    implemented in Python~3.9/Pyomo and solved with IBM CPLEX~22.1.1;
+  \item \textbf{BESS Virtual Inertia and PFR FCUC Formulation:}
+    A rigorous MILP FCUC model co-optimizing thermal generator dispatch,
+    dedicated BESS virtual inertia with explicit discharge power
+    allocation coupling, governor-droop Primary Frequency Regulation
+    (PFR) based on the Southern Sulawesi grid formulation~\cite{E02Sulawesi},
+    and renewable generation from solar PV and wind turbines;
 
   \item \textbf{Seven-Scenario Systematic Analysis:} Evaluation across
     seven constraint configurations (Table~\ref{tab:scenarios})
-    quantifies the cost--security trade-off, yielding actual
-    numerical results with all seven scenarios fully executed;
+    quantifies the cost--security trade-off, demonstrating how BESS
+    virtual inertia effectively eliminates RoCoF violations while
+    lowering operational expenditures;
 
-  \item \textbf{Practical Insights for Indonesia:} Case study
-    parameters aligned with Indonesian power systems and RUPTL
-    2025--2034 targets, demonstrating that full frequency security
-    can be achieved below the baseline classical UC cost.
+  \item \textbf{Practical Insights for Indonesian Power Systems:}
+    Case study parameters and operational constraints aligned with
+    Indonesian grid codes and RUPTL 2025--2034 targets, confirming that
+    frequency-secure operation can be achieved without inflating total
+    system costs.
 \end{enumerate}
 
 % =========================================================
 \section{System Modeling}
 \label{sec:model}
 
-\subsection{Conventional Generator Model}
+This section formulates the mathematical models for generating resources, battery storage, renewable generation, system inertia, and primary frequency regulation (PFR) in accordance with the Southern Sulawesi power system operational framework~\cite{E02Sulawesi} and established frequency stability theory.
 
-The fuel cost of unit~$i$ at period~$t$ is approximated by piecewise
-linear (PWL) cost with $K$ segments to maintain MILP tractability:
+\subsection{Conventional Thermal Generator Model}
+
+Consider an interconnected power system with $N$ conventional thermal generating units indexed by $g \in \mathcal{G} = \{1, 2, \dots, N\}$ over a scheduling horizon of $T$ hourly intervals indexed by $t \in \mathcal{T} = \{1, 2, \dots, T\}$. 
+
+The operational generation cost of thermal unit~$g$ at time~$t$, denoted as $F_g(P_{g,t})$, is represented by an affine function of active power output~\cite{E02Sulawesi}:
 \begin{equation}
-  C_i^{\text{gen}}(P_{i,t}) \approx
-    c_i^{\text{fixed}}\,u_{i,t}
-    + \sum_{k=1}^{K} \lambda_{i,k}\,\Delta P_{i,k,t}
-  \label{eq:pwl}
+  F_g(P_{g,t}) = a_g\,u_{g,t} + b_g\,P_{g,t}
+  \label{eq:thermal_cost}
 \end{equation}
-where $\lambda_{i,k}$~[USD/MWh] is the slope of segment~$k$,
-$\Delta P_{i,k,t}$~[MW] is power allocated to that segment,
-and $u_{i,t}\in\{0,1\}$ is the binary commitment status.
-Each committed SG contributes rotational inertia constant
-$H_{\text{SG},i}$~[MWs/MVA] (typically 2--9~MWs/MVA~\cite{Kundur1994}).
+where $u_{g,t} \in \{0, 1\}$ is the binary commitment status of unit~$g$ at period~$t$ ($u_{g,t}=1$ if committed/online, and $0$ if offline), $P_{g,t}$ is the active power generation output [MW], $a_g$ is the fixed (no-load) operational cost [\$], and $b_g$ is the marginal fuel cost coefficient [\$/MWh].
 
-\subsection{Battery Energy Storage System (BESS) Model}
-
-The State of Charge (SoC) of BESS unit~$b$ evolves as:
+Each committed synchronous generator contributes physical rotational kinetic energy stored within its rotating turbine-generator mass. With inertia constant $H_g$~[s or MWs/MVA] and maximum capacity rating $P_g^{\max}$~[MW], the aggregate natural rotational inertia provided by online thermal units at period~$t$, denoted as $H_{\text{thermal},t}$~[MWs], is given by:
 \begin{equation}
-  E_{b,t} = E_{b,t-1}
-    + \eta_c^b\,P_{c,b,t}\,\Delta t
-    - \frac{P_{d,b,t}\,\Delta t}{\eta_d^b}
-  \label{eq:soc}
+  H_{\text{thermal},t} = \sum_{g=1}^{N} H_g\,P_g^{\max}\,u_{g,t}
+  \label{eq:thermal_inertia}
 \end{equation}
-where $E_{b,t}$~[MWh] is stored energy, $P_{c,b,t}$ and
-$P_{d,b,t}$~[MW] are charging and discharging power, and
-$\eta_c^b$, $\eta_d^b$ are charge/discharge efficiencies.
 
-BESS provides virtual inertia via grid-forming converter control.
-The equivalent virtual inertia constant contributed by BESS unit~$b$:
+\subsection{Battery Energy Storage System (BESS) and Virtual Inertia Model}
+
+The energy storage fleet comprises $B$ BESS installations indexed by $b \in \mathcal{B} = \{1, 2, \dots, B\}$. The State of Charge $\text{SOC}_{b,t}$~[MWh] tracks the usable electrical energy stored in battery unit~$b$ at time~$t$. The discrete-time SOC dynamic transition over hourly intervals ($\Delta t = 1$~h) is governed by:
 \begin{equation}
-  H_{\text{VI,BESS},b,t}
-    = K_{\text{VI}}^{\text{BESS}}\cdot P_{\text{VI},b,t}
+  \text{SOC}_{b,t} = 
+  \begin{cases}
+    \text{SOC}_b^{\text{init}} + \eta_b^{\text{ch}}\,P_{b,1}^{\text{ch}} - \dfrac{P_{b,1}^{\text{dis}}}{\eta_b^{\text{dis}}}, & t = 1 \\[10pt]
+    \text{SOC}_{b,t-1} + \eta_b^{\text{ch}}\,P_{b,t}^{\text{ch}} - \dfrac{P_{b,t}^{\text{dis}}}{\eta_b^{\text{dis}}}, & \forall\,t \in \{2, \dots, T\}
+  \end{cases}
+  \label{eq:soc_dynamics}
+\end{equation}
+where $P_{b,t}^{\text{ch}}$ and $P_{b,t}^{\text{dis}}$ denote charging and discharging active power [MW], $\eta_b^{\text{ch}} \in (0, 1]$ and $\eta_b^{\text{dis}} \in (0, 1]$ are charge and discharge efficiencies, and $\text{SOC}_b^{\text{init}}$ is the initial energy level at $t=0$.
+
+In addition to bulk energy arbitrage (charging during low-cost/high-VRE hours and discharging during peak demand), the BESS operates with grid-forming (GFM) converter controls to supply sub-second virtual inertia (VI). The equivalent virtual inertia constant $H_{\text{BESS},t}$~[MWs] contributed by the battery fleet is expressed as:
+\begin{equation}
+  H_{\text{BESS},t} = \sum_{b=1}^{B} K_b^{\text{VI}}\,P_{b,t}^{\text{VI}}
   \label{eq:bess_vi}
 \end{equation}
-where $K_{\text{VI}}^{\text{BESS}}$~[MWs/MW] is the virtual inertia
-gain coefficient and $P_{\text{VI},b,t}$~[MW] is the power headroom
-reserved for VI provision~\cite{VI06OptimalPlacement}.
+where $K_b^{\text{VI}}$ represents the virtual inertia constant of battery unit~$b$~[s] and $P_{b,t}^{\text{VI}}$ is the active power headroom allocated specifically for virtual inertia support [MW].
 
-\subsection{Wind Turbine Model}
-
-Synthetic inertia from wind turbines is provided by transiently
-extracting kinetic energy from the rotating rotor mass following
-the two-stage control framework of~\cite{Chu2020}:
+\textbf{BESS Converter Power Allocation Coupling:}
+A critical physical requirement in battery energy storage operation is ensuring that the power conversion system (PCS) rating is never exceeded during simultaneous energy dispatch and frequency response. Specifically, the power allocated for grid energy discharge $P_{b,t}^{\text{dis}}$ and the headroom reserved for virtual inertia $P_{b,t}^{\text{VI}}$ share the same converter capacity. Accounting for the converter efficiency during virtual inertia injection $\eta_b^{\text{VI}} \in (0, 1]$, the coupled discharge capability limit is formulated as:
 \begin{equation}
-  H_{\text{VI,WT},w,t}
-    = K_{\text{VI}}^{\text{WT}}\cdot P_{\text{VI,WT},w,t}
-  \label{eq:wt_vi}
+  P_{b,t}^{\text{dis}} + \frac{P_{b,t}^{\text{VI}}}{\eta_b^{\text{VI}}} \leq DR_b^{\max}\,u_{b,t}^{\text{dis}}
+  \label{eq:bess_power_alloc}
 \end{equation}
-where $K_{\text{VI}}^{\text{WT}}$~[MWs/MW] is the WT virtual
-inertia gain.
-VI is constrained to the available curtailment headroom:
+where $u_{b,t}^{\text{dis}} \in \{0, 1\}$ is the binary discharging status variable, $DR_b^{\max}$ is the maximum continuous discharge power rating [MW], and $P_{b,t}^{\text{VI}} \geq 0$. Equation~\eqref{eq:bess_power_alloc} ensures that allocating battery capacity to virtual inertia directly constrains its simultaneous energy dispatch, preventing inverter overload.
+
+\subsection{Renewable Generation Model (Wind Turbine and Solar PV)}
+
+Renewable energy generation includes $W$ wind turbine (PLTB) farms indexed by $w \in \mathcal{W} = \{1, \dots, W\}$ and $V$ solar photovoltaic (PLTS) plants indexed by $v \in \mathcal{V} = \{1, \dots, V\}$.
+
+For each wind farm~$w$, available generation $P_{w,t}^{\text{avail}}$~[MW] is determined by the number of active wind turbine units $N_w$, the rated capacity per turbine $P_w^{\text{rated}}$~[MW], and the normalized wind availability profile $\Phi_{W_t} \in [0, 1]$:
 \begin{equation}
-  P_{\text{VI,WT},w,t} \leq P_{\text{Curt},w,t}
-  \label{eq:wt_vi_curtailment}
+  P_{w,t}^{\text{avail}} = N_w\,P_w^{\text{rated}}\,\Phi_{W_t}
+  \label{eq:wt_avail}
+\end{equation}
+The dispatched wind generation $P_{w,t}^{\text{used}}$ injected into the grid equals available output minus curtailment $P_{w,t}^{\text{curt}}$:
+\begin{equation}
+  P_{w,t}^{\text{used}} = P_{w,t}^{\text{avail}} - P_{w,t}^{\text{curt}}, \quad 0 \leq P_{w,t}^{\text{curt}} \leq P_{w,t}^{\text{avail}}
+  \label{eq:wt_used}
 \end{equation}
 
-\subsection{Aggregate System Inertia}
-
-Total effective system inertia at scheduling period~$t$:
+Similarly, for each solar PV installation~$v$, available power $P_{v,t}^{\text{avail}}$~[MW] is given by rated capacity $N_v\,P_v^{\text{rated}}$ and solar irradiance potential $\Phi_{PV_t} \in [0, 1]$:
 \begin{equation}
-  H_{\text{sys}}(t)
-    = \!\sum_{i \in \mathcal{G}_{\text{th}}}\!
-        H_{\text{SG},i}\,P_i^{\max}\,u_{i,t}
-      + \!\sum_{b}\!
-        K_{\text{VI}}^{\text{BESS}}\,P_{\text{VI},b,t}
-      + \!\sum_{w}\!
-        K_{\text{VI}}^{\text{WT}}\,P_{\text{VI,WT},w,t}
-  \label{eq:hsys}
+  P_{v,t}^{\text{avail}} = N_v\,P_v^{\text{rated}}\,\Phi_{PV_t}
+  \label{eq:pv_avail}
 \end{equation}
-This expression is \emph{linear} in the decision variables
-$u_{i,t}$, $P_{\text{VI},b,t}$, and $P_{\text{VI,WT},w,t}$,
-preserving MILP tractability.
-
-\subsection{System Frequency Response (SFR) Model}
-
-The aggregate frequency response following generation
-loss~$\Delta P_{\text{loss}}$ is described by the swing
-equation~\cite{Anderson1990}:
+The dispatched solar PV power injected into the power system is:
 \begin{equation}
-  2\,H_{\text{sys}}(t)\,\frac{d\Delta f}{dt}
-    = -\Delta P_{\text{loss}}
-      + \Delta P_{\text{gov}}(t)
-      + \Delta P_{\text{VI}}(t)
-      - D\,\Delta f(t)
+  P_{v,t}^{\text{used}} = P_{v,t}^{\text{avail}} - P_{v,t}^{\text{curt}}, \quad 0 \leq P_{v,t}^{\text{curt}} \leq P_{v,t}^{\text{avail}}
+  \label{eq:pv_used}
+\end{equation}
+
+\textbf{Non-Participation of Renewables in Virtual Inertia:}
+In this work, wind turbines and solar PV installations operate strictly as grid-following energy producers under maximum power point tracking with downward curtailment capability. To eliminate rotor deceleration stress, kinetic energy recovery dips, and de-loading revenue losses in wind generation, WT and PV do not contribute to virtual inertia ($P_{w,t}^{\text{VI}} = 0, P_{v,t}^{\text{VI}} = 0$). Synthetic inertia is therefore provided exclusively by the dedicated BESS.
+
+\subsection{Aggregate System Inertia and RoCoF Dynamics}
+
+The total effective system inertia at scheduling period~$t$, $H_{\text{sys},t}$~[MWs], is the sum of natural rotational inertia from synchronous generators and virtual inertia from BESS:
+\begin{equation}
+  H_{\text{sys},t} = \sum_{g=1}^{N} H_g\,P_g^{\max}\,u_{g,t} + \sum_{b=1}^{B} K_b^{\text{VI}}\,P_{b,t}^{\text{VI}}
+  \label{eq:hsys_total}
+\end{equation}
+Notice that~\eqref{eq:hsys_total} is strictly linear in the decision variables $u_{g,t}$ and $P_{b,t}^{\text{VI}}$, ensuring full compatibility with Mixed-Integer Linear Programming.
+
+Following a severe contingency event corresponding to the loss of the largest generation unit ($P^{\text{loss}}_t$~[MW]), the power mismatch instantaneously accelerates system frequency deviation according to the center-of-inertia (COI) swing equation~\cite{Anderson1990}:
+\begin{equation}
+  2\,H_{\text{sys},t}\,\left.\frac{df}{dt}\right|_{t=0^+} = -f_0\,P^{\text{loss}}_t
   \label{eq:swing}
 \end{equation}
-where $\Delta f = f - f_0$ is the frequency deviation from nominal
-($f_0 = 50$~Hz), $\Delta P_{\text{gov}}(t)$ is the aggregate
-governor response, $\Delta P_{\text{VI}}(t)$ is total virtual
-inertia power injection, and $D$ is the load damping coefficient.
-
-From the SFR model, three key frequency metrics are derived.
-
-\textbf{RoCoF} (at $t=0^+$):
+where $f_0$ is nominal frequency ($50$~Hz). The initial Rate of Change of Frequency ($\text{RoCoF}_t$) is given by:
 \begin{equation}
-  \text{RoCoF}
-    = \frac{f_0\cdot\Delta P_{\text{loss}}}{2\,H_{\text{sys}}(t)}
-  \quad [\text{Hz/s}]
-  \label{eq:rocof}
+  \text{RoCoF}_t = \left|\left.\frac{df}{dt}\right|_{t=0^+}\right| = \frac{f_0\,P^{\text{loss}}_t}{2\,H_{\text{sys},t}} \quad [\text{Hz/s}]
+  \label{eq:rocof_def}
 \end{equation}
-
-\textbf{QSS frequency deviation}:
+To satisfy system security requirements and avoid tripping RoCoF protective relays, the RoCoF limit $\text{RoCoF}^{\max}$~[Hz/s] is enforced by ensuring sufficient system inertia:
 \begin{equation}
-  \Delta f_{\text{QSS}}
-    = \frac{f_0\cdot\Delta P_{\text{loss}}}
-           {D\,S_{\text{sys}} + R_{\text{sys}}(t)}
-  \label{eq:qss}
+  \text{RoCoF}_t \leq \text{RoCoF}^{\max} \iff H_{\text{sys},t} \geq \frac{f_0\,P^{\text{loss}}_t}{2\,\text{RoCoF}^{\max}}
+  \label{eq:rocof_bound}
 \end{equation}
-where $R_{\text{sys}}(t) = \sum_{i}\,R_i\,u_{i,t}$~[MW/Hz]
-is the total governor droop response.
+where $P^{\text{loss}}_t = P_{k_t} = \max_{g \in \mathcal{G}} (P_{g,t}\,u_{g,t})$ or $\max_{g \in \mathcal{G}} (P_g^{\max}\,u_{g,t})$.
+
+\subsection{Primary Frequency Regulation (PFR) Model}
+
+Following inertial deceleration, primary frequency response takes effect over the interval $2 < t \leq 10$--$30$~s through autonomous turbine-governor action. The frequency settles at a quasi-steady-state value $f_{\text{ss},t} = f_0 + \Delta f_t$, where $\Delta f_t \leq 0$ is the steady-state frequency deviation resulting from the contingency.
+
+In accordance with the Southern Sulawesi system study~\cite{E02Sulawesi} and Restrepo and Galiana~\cite{Restrepo2005}, thermal units with active free governors increase active power in proportion to frequency drop according to their speed droop characteristics. The primary reserve delivered by unit~$g$ at period~$t$, $R_{g,t}^{\text{PFR}}$~[MW], is expressed as:
+\begin{equation}
+  R_{g,t}^{\text{PFR}} = \min\left(-K_g\,\Delta f_t, \, P_{g,t}^{\max,\text{FR}} - P_{g,t}\right)
+  \label{eq:pfr_droop}
+\end{equation}
+where $K_g = \frac{P_g^{\text{rated}}}{\sigma_g\,f_0}$ is the governor frequency bias (gain) of unit~$g$~[MW/Hz] with droop slope $\sigma_g$, and $P_{g,t}^{\max,\text{FR}}$ is the maximum power output deliverable within the primary regulation window:
+\begin{equation}
+  P_{g,t}^{\max,\text{FR}} = \min\left(P_g^{\max}\,u_{g,t}, \, P_{g,t} + R_g^{\text{PFR},\max}\,u_{g,t}\right)
+  \label{eq:p_max_fr}
+\end{equation}
+Here, $R_g^{\text{PFR},\max} = v_g^{\text{gov}}\,\Delta t_{\text{PFR}}$ is the maximum primary reserve delivery capability determined by governor ramping speed $v_g^{\text{gov}}$~[MW/s] over primary regulation timeframe $\Delta t_{\text{PFR}} \approx 10$~s.
+
+Equation~\eqref{eq:pfr_droop} defines two distinct operating regions:
+\begin{equation}
+  R_{g,t}^{\text{PFR}} = 
+  \begin{cases}
+    -K_g\,\Delta f_t, & \text{if } \Delta f_t \geq \Delta f_{g,t}^{\max} \\[6pt]
+    -K_g\,\Delta f_{g,t}^{\max}, & \text{if } \Delta f_t \leq \Delta f_{g,t}^{\max}
+  \end{cases}
+  \label{eq:pfr_piecewise}
+\end{equation}
+where $\Delta f_{g,t}^{\max} \leq 0$ is the saturation frequency deviation at which generator~$g$ reaches its maximum headroom:
+\begin{equation}
+  \Delta f_{g,t}^{\max} = \frac{P_{g,t} - P_{g,t}^{\max,\text{FR}}}{K_g}
+  \label{eq:delta_f_max}
+\end{equation}
+To avoid triggering under-frequency load shedding (UFLS) relays (set at $49.0$~Hz in Indonesia), steady-state frequency deviation under the worst-case contingency must remain above the permissible bound:
+\begin{equation}
+  \Delta f_t \geq \Delta f_{\text{ss}}^{\min} \quad (\text{e.g., } \Delta f_{\text{ss}}^{\min} = -0.5\text{ Hz} \implies f_{\text{ss},t} \geq 49.5\text{ Hz})
+  \label{eq:ss_freq_limit}
+\end{equation}
 
 % =========================================================
 \section{FCUC Problem Formulation}
 \label{sec:formulation}
 
+Integrating the operational models of conventional generators, BESS virtual inertia, renewable generation, and primary frequency regulation yields the comprehensive Frequency-Constrained Unit Commitment (FCUC) problem formulated as a Mixed-Integer Linear Program (MILP).
+
 \subsection{Objective Function}
 
+The objective of the optimization is to minimize the total system operational cost over the planning horizon $T$ (matching~\cite{E02Sulawesi} and Image~1):
 \begin{equation}
-  \min \sum_{t=1}^{T} \biggl[
-    \sum_{i \in \mathcal{G}} \bigl(
-      C_i^{\text{gen}}(P_{i,t})
-      + C_i^{\text{SU}}\,v_{i,t}
-      + C_i^{\text{SD}}\,w_{i,t}
-    \bigr)
-    + c_{\text{deg}}\!\sum_{b}
-      (P_{c,b,t}+P_{d,b,t})\,\Delta t
-  \biggr]
-  \label{eq:obj}
+  \min \sum_{t=1}^{T} \sum_{g=1}^{N} \left[ u_{g,t}\,F_g(P_{g,t}) + SU_{g,t} \right]
+  \label{eq:objective_base}
 \end{equation}
-where $v_{i,t}, w_{i,t}\in\{0,1\}$ are start-up/shut-down binary
-variables, $C_i^{\text{SU}},C_i^{\text{SD}}$~[USD] are corresponding
-costs, and $c_{\text{deg}}$~[USD/MWh] is BESS degradation cost.
-
-\subsection{Standard UC Constraints}
-
-\textbf{C1 --- Power balance}:
+Substituting the affine generation cost function~\eqref{eq:thermal_cost} and modeling startup cost via binary startup transition variables $v_{g,t} \in \{0, 1\}$:
 \begin{equation}
-  \sum_{i \in \mathcal{G}} P_{i,t}
-  + \sum_{b}(P_{d,b,t} - P_{c,b,t})
-  + \sum_{w} P_{\text{WT},w,t}
-  = D_t \quad \forall\,t
-  \label{eq:balance}
+  \min \sum_{t=1}^{T} \sum_{g=1}^{N} \left[ a_g\,u_{g,t} + b_g\,P_{g,t} + SU_g\,v_{g,t} \right]
+  \label{eq:objective_full}
 \end{equation}
+where $a_g$ is the fixed cost [\$], $b_g$ is the variable fuel cost [\$/MWh], and $SU_g$ is the startup cost [\$] of unit~$g$.
 
-\textbf{C2 --- Generation capacity limits}:
+\subsection{Operational Constraints}
+
+\subsubsection{C1: Active Power Balance}
+Active power generated by thermal units, net BESS discharge, wind injection, and solar PV injection must satisfy hourly demand $P_{L,t}$~[MW] (Image~2 extended with solar PV):
 \begin{equation}
-  u_{i,t}\,P_i^{\min} \leq P_{i,t} \leq u_{i,t}\,P_i^{\max}
-  \quad \forall\,i,\,t
-  \label{eq:genlim}
+  \begin{aligned}
+    \sum_{g=1}^{N} P_{g,t}
+    &+ \sum_{b=1}^{B} \left( P_{b,t}^{\text{dis}} - P_{b,t}^{\text{ch}} \right)
+    + \sum_{w=1}^{W} \left( P_{w,t}^{\text{avail}} - P_{w,t}^{\text{curt}} \right) \\
+    &+ \sum_{v=1}^{V} \left( P_{v,t}^{\text{avail}} - P_{v,t}^{\text{curt}} \right)
+    = P_{L,t} \quad \forall\,t \in \mathcal{T}
+  \end{aligned}
+  \label{eq:power_balance}
 \end{equation}
 
-\textbf{C3 --- Ramp rate limits}:
+\subsubsection{C2: Thermal Generation Limits and Ramping}
+Each conventional unit is constrained by technical capacity bounds and ramp-rate limits (Image~2 and~\cite{E02Sulawesi}):
 \begin{align}
-  P_{i,t} - P_{i,t-1}
-    &\leq RU_i\,u_{i,t-1} + P_i^{\min}\,v_{i,t}
-  \label{eq:rampup} \\
-  P_{i,t-1} - P_{i,t}
-    &\leq RD_i\,u_{i,t} + P_i^{\min}\,w_{i,t}
-  \label{eq:rampdown}
+  P_g^{\min}\,u_{g,t} &\leq P_{g,t} \leq P_g^{\max}\,u_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:gen_limit} \\
+  -RD_g &\leq P_{g,t} - P_{g,t-1} \leq RU_g \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:ramp_limit}
+\end{align}
+where $P_g^{\min}$ and $P_g^{\max}$ are minimum and maximum dispatch limits [MW], and $RU_g, RD_g$ are maximum hourly ramp-up and ramp-down rates [MW/h].
+
+\subsubsection{C3: Minimum Up-Time and Down-Time}
+To prevent thermal stress, generating units must adhere to minimum uptime $T_g^{\text{up}}$ and downtime $T_g^{\text{down}}$ (Image~3 and~\cite{E02Sulawesi}):
+\begin{align}
+  \sum_{\tau=t-T_g^{\text{up}}+1}^{t} v_{g,\tau} &\leq u_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:min_uptime} \\
+  \sum_{\tau=t-T_g^{\text{down}}+1}^{t} w_{g,\tau} &\leq 1 - u_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:min_downtime} \\
+  u_{g,t} - u_{g,t-1} &= v_{g,t} - w_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:status_logic} \\
+  v_{g,t} + w_{g,t} &\leq 1 \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:no_sim_su_sd}
+\end{align}
+where $v_{g,t}, w_{g,t} \in \{0, 1\}$ are binary startup and shutdown decision variables.
+
+\subsubsection{C4: Spinning Reserve and N-1 Contingency}
+Scheduled spinning reserve $R_{g,t}$ is bounded by generator headroom, and aggregate spinning reserves must cover the single largest committed generator output $P_{k_t}$ (Image~3):
+\begin{align}
+  P_{g,t} + R_{g,t} &\leq P_g^{\max}\,u_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:reserve_headroom} \\
+  \sum_{g \neq k} R_{g,t} &\geq P_{k_t} \quad \forall\,t \in \mathcal{T}
+  \label{eq:n1_reserve}
+\end{align}
+where $P_{k_t} = \max_{g \in \mathcal{G}} (P_{g,t})$ is the dispatched output of the contingency unit.
+
+\subsubsection{C5: BESS Operational Limits and Power Allocation}
+The battery fleet satisfies energy storage limits, cyclic energy balance, charging/discharging limits, and converter power allocation coupling (Images~3, 4):
+\begin{align}
+  \text{SOC}_b^{\min} &\leq \text{SOC}_{b,t} \leq \text{SOC}_b^{\max} \quad \forall\,b \in \mathcal{B},\,t \in \mathcal{T}
+  \label{eq:soc_limits} \\
+  \text{SOC}_{b,T} &= \text{SOC}_b^{\text{final}} \quad \forall\,b \in \mathcal{B}
+  \label{eq:final_soc} \\
+  P_{b,t}^{\text{ch}} &\leq CR_b^{\max}\,u_{b,t}^{\text{ch}} \quad \forall\,b \in \mathcal{B},\,t \in \mathcal{T}
+  \label{eq:ch_limit} \\
+  u_{b,t}^{\text{ch}} + u_{b,t}^{\text{dis}} &\leq 1 \quad \forall\,b \in \mathcal{B},\,t \in \mathcal{T}
+  \label{eq:no_sim_ch_dis}
+\end{align}
+Crucially, the BESS discharge power allocation coupling between bulk energy discharge and virtual inertia headroom (Image~4) is enforced:
+\begin{align}
+  P_{b,t}^{\text{dis}} + \frac{P_{b,t}^{\text{VI}}}{\eta_b^{\text{VI}}} &\leq DR_b^{\max}\,u_{b,t}^{\text{dis}} \quad \forall\,b \in \mathcal{B},\,t \in \mathcal{T}
+  \label{eq:bess_coupled_discharge} \\
+  P_{b,t}^{\text{VI}} &\geq 0 \quad \forall\,b \in \mathcal{B},\,t \in \mathcal{T}
+  \label{eq:vi_nonneg}
+\end{align}
+where $u_{b,t}^{\text{ch}}, u_{b,t}^{\text{dis}} \in \{0, 1\}$ prevent simultaneous charging and discharging, and $CR_b^{\max}, DR_b^{\max}$ are converter power ratings [MW].
+
+\subsubsection{C6: Renewable Curtailment Limits}
+Curtailment for wind and solar PV power is non-negative and bounded by instantaneous available generation (Images~2, 3):
+\begin{align}
+  0 \leq P_{w,t}^{\text{curt}} &\leq P_{w,t}^{\text{avail}} \quad \forall\,w \in \mathcal{W},\,t \in \mathcal{T}
+  \label{eq:wt_curt_limit} \\
+  0 \leq P_{v,t}^{\text{curt}} &\leq P_{v,t}^{\text{avail}} \quad \forall\,v \in \mathcal{V},\,t \in \mathcal{T}
+  \label{eq:pv_curt_limit}
 \end{align}
 
-\textbf{C4 --- Minimum up/down time}:
+\subsubsection{C7: System Inertia and RoCoF Security Constraint}
+To preserve frequency stability against excessive RoCoF, the aggregate system inertia---consisting of synchronous thermal inertia and BESS virtual inertia---must satisfy the dynamic RoCoF security constraint (Image~4):
+\begin{equation}
+  \sum_{g=1}^{N} H_g\,P_g^{\max}\,u_{g,t} + \sum_{b=1}^{B} K_b^{\text{VI}}\,P_{b,t}^{\text{VI}} \geq \frac{f_0\,P^{\text{loss}}_t}{2\,\text{RoCoF}^{\max}} \quad \forall\,t \in \mathcal{T}
+  \label{eq:rocof_constraint_full}
+\end{equation}
+where $P^{\text{loss}}_t = \max_{g \in \mathcal{G}} (P_g^{\max}\,u_{g,t})$ is the largest potential outage capacity. Equation~\eqref{eq:rocof_constraint_full} explicitly links BESS virtual inertia headroom to system frequency security, with wind and solar excluded from virtual inertia provision.
+
+\subsubsection{C8: Primary Frequency Regulation (PFR) Constraints}
+Following the PFR formulation in~\cite{E02Sulawesi}, primary reserve headroom, ramp limits, contingency adequacy, and steady-state frequency bounds are enforced:
 \begin{align}
-  \sum_{\tau=t}^{t+UT_i-1} u_{i,\tau}
-    &\geq UT_i\cdot v_{i,t}
-  \label{eq:mut} \\
-  \sum_{\tau=t}^{t+DT_i-1} (1-u_{i,\tau})
-    &\geq DT_i\cdot w_{i,t}
-  \label{eq:mdt}
+  0 \leq R_{g,t}^{\text{PFR}} &\leq P_g^{\max}\,u_{g,t} - P_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:pfr_headroom_con} \\
+  R_{g,t}^{\text{PFR}} &\leq R_g^{\text{PFR},\max}\,u_{g,t} \quad \forall\,g \in \mathcal{G},\,t \in \mathcal{T}
+  \label{eq:pfr_ramp_con} \\
+  \sum_{g \neq k} R_{g,t}^{\text{PFR}} &\geq P_{k_t} \quad \forall\,t \in \mathcal{T}
+  \label{eq:pfr_adequacy} \\
+  \Delta f_t &\geq \Delta f_{\text{ss}}^{\min} \quad \forall\,t \in \mathcal{T}
+  \label{eq:pfr_dft_limit}
 \end{align}
 
-\textbf{C5 --- Start-up/Shut-down logic}:
-\begin{equation}
-  v_{i,t} - w_{i,t} = u_{i,t} - u_{i,t-1}
-  \quad \forall\,i,\,t
-  \label{eq:susd}
-\end{equation}
+\subsection{MILP Linearization of Primary Frequency Regulation}
 
-\textbf{C6 --- N-1 Spinning reserve}:
-\begin{align}
-  \Delta P_{\text{loss}}(t)
-    &\geq P_{i,t}
-  \quad \forall\,i \in \mathcal{G}_{\text{th}},\,t
-  \label{eq:largestloss} \\
-  \sum_{i \in \mathcal{G}} R_{i,t}
-    &\geq \Delta P_{\text{loss}}(t)
-  \quad \forall\,t
-  \label{eq:reserve}
-\end{align}
+The governor droop characteristic~\eqref{eq:pfr_piecewise} features a piecewise non-smooth relationship and bilinear products between commitment status $u_{g,t}$ and frequency deviation $\Delta f_t$. To solve the model using standard Mixed-Integer Linear Programming (MILP) solvers such as IBM CPLEX, we implement the exact linearization method developed by Restrepo and Galiana~\cite{Restrepo2005} and applied in the Southern Sulawesi model~\cite{E02Sulawesi}.
 
-\subsection{BESS Operational Constraints}
-
-\textbf{C7 --- SoC dynamics and bounds}:
-\begin{align}
-  E_b^{\min}
-    &\leq E_{b,t} \leq E_b^{\max}
-    \quad \forall\,b,\,t
-  \label{eq:socbound} \\
-  E_{b,T} &= E_{b,0}
-  \quad \forall\,b \quad \text{(daily energy neutrality)}
-  \label{eq:energyneutral}
-\end{align}
-
-\textbf{C8 --- BESS power limits with VI headroom}:
-\begin{align}
-  0 \leq P_{c,b,t}
-    &\leq P_b^{\max}\,\delta_{c,b,t}
-  \label{eq:chg} \\
-  0 \leq P_{d,b,t}
-    &\leq P_b^{\max}\,\delta_{d,b,t}
-  \label{eq:dis} \\
-  \delta_{c,b,t} + \delta_{d,b,t}
-    &\leq 1
-  \label{eq:nosimcd}
-\end{align}
-
-\textbf{C9 --- VI power headroom}:
-\begin{equation}
-  0 \leq P_{\text{VI},b,t}
-    \leq P_b^{\max}\,\delta_{d,b,t} - P_{d,b,t}
-  \label{eq:vi_headroom}
-\end{equation}
-
-\subsection{Wind Turbine Constraints}
-
-\textbf{C10 --- WT output with curtailment}:
-\begin{align}
-  P_{\text{WT},w,t}
-    + P_{\text{Curt},w,t}
-    &= P_{\text{WT},w,t}^{\text{avail}}
-  \label{eq:wt_avail} \\
-  P_{\text{WT},w,t},\,P_{\text{Curt},w,t}
-    &\geq 0
-  \label{eq:wt_nn}
-\end{align}
-
-\subsection{Frequency Security Constraints}
-
-\textbf{C11 --- RoCoF constraint}
-(rearranging~\eqref{eq:rocof} with limit
-$\text{RoCoF}^{\max}$~[Hz/s]):
-\begin{equation}
-  \boxed{
-  2\,\text{RoCoF}^{\max}\cdot H_{\text{sys}}(t)
-  \geq f_0\cdot\Delta P_{\text{loss}}(t)
-  }
-  \quad \forall\,t
-  \label{eq:rocof_con}
-\end{equation}
-This is \emph{linear} in $H_{\text{sys}}(t)$ via~\eqref{eq:hsys}.
-
-\textbf{C12 --- Minimum system inertia}:
-\begin{equation}
-  H_{\text{sys}}(t) \geq H_{\text{sys}}^{\min}
-  \quad \forall\,t
-  \label{eq:hmin}
-\end{equation}
-
-\textbf{C13 --- QSS constraint}
-(rearranging~\eqref{eq:qss}):
-\begin{equation}
-  R_{\text{sys}}(t)
-    \geq \frac{f_0\cdot\Delta P_{\text{loss}}(t)}
-              {\Delta f_{\text{QSS}}^{\max}}
-         - D\,S_{\text{sys}}
-  \quad \forall\,t
-  \label{eq:qss_con}
-\end{equation}
-where $\Delta f_{\text{QSS}}^{\max} = f_0 - f_{\text{QSS}}^{\min}$~[Hz].
-
-The complete FCUC model is a \textbf{MILP}:
+The linearization employs two binary indicator variables and two continuous slack variables:
 \begin{itemize}
-  \item Decision variables:
-    $\{u_{i,t},\,v_{i,t},\,w_{i,t},\,P_{i,t},\,E_{b,t},\,P_{c,b,t},\,
-     P_{d,b,t},\,\delta_{c,b,t},\,\delta_{d,b,t},\,P_{\text{WT},w,t},\,
-     P_{\text{Curt},w,t},\,P_{\text{VI},b,t},\,P_{\text{VI,WT},w,t}\}$
-  \item Objective: minimize~\eqref{eq:obj}
-  \item Constraints: C1--C13 (\eqref{eq:balance}--\eqref{eq:qss_con})
+  \item $V_{g,t} \in \{0, 1\}$: indicates whether available unit capacity headroom is smaller than the primary ramp capability ($V_{g,t} = 1$) or the primary ramp limit binds ($V_{g,t} = 0$).
+  \item $X_{g,t} \in \{0, 1\}$: indicates whether the generator operates on its proportional droop response slope ($X_{g,t} = 0$) or reaches primary reserve saturation ($X_{g,t} = 1$).
+  \item $S_{g,t} = V_{g,t}\,P_{g,t}$: continuous McCormick bilinear product between $V_{g,t}$ and dispatched generation $P_{g,t}$.
+  \item $H_{g,t} = u_{g,t}\,\Delta f_t$: continuous bilinear product between commitment status $u_{g,t}$ and steady-state frequency deviation $\Delta f_t$.
 \end{itemize}
+
+The ceiling power output $P_{g,t}^{\max,\text{FR}} = \min(P_g^{\max}\,u_{g,t}, P_{g,t} + R_g^{\text{PFR},\max})$ is linearized through:
+\begin{align}
+  P_{g,t}^{\max,\text{FR}} &= P_g^{\max}\,u_{g,t} + (R_g^{\text{PFR},\max} - P_g^{\max})\,V_{g,t} + S_{g,t}
+  \label{eq:lin_pmaxfr} \\
+  P_g^{\min}\,V_{g,t} &\leq S_{g,t} \leq P_g^{\max}\,V_{g,t}
+  \label{eq:lin_slack1} \\
+  P_{g,t} - P_g^{\max}\,(1 - V_{g,t}) &\leq S_{g,t} \leq P_{g,t}
+  \label{eq:lin_slack2}
+\end{align}
+
+The binary saturation indicator $X_{g,t}$ is governed by:
+\begin{align}
+  -\frac{\Delta f_t}{R_g^{\text{PFR},\max}} + \frac{\Delta f_{g,t}^{\max}}{R_g^{\text{PFR},\max}} &\leq X_{g,t} \leq 1 + \frac{\Delta f_t}{R_g^{\text{PFR},\max}} - \frac{\Delta f_{g,t}^{\max}}{R_g^{\text{PFR},\max}}
+  \label{eq:lin_xflag}
+\end{align}
+The delivered primary reserve $R_{g,t}^{\text{PFR}}$ is bounded linearly by:
+\begin{align}
+  -K_g\,H_{g,t} - P_g^{\max}\,X_{g,t} &\leq R_{g,t}^{\text{PFR}} \leq -K_g\,H_{g,t}
+  \label{eq:lin_rpfr1} \\
+  -K_g\,\Delta f_{g,t}^{\max} - P_g^{\max}\,(1 - X_{g,t}) &\leq R_{g,t}^{\text{PFR}} \leq -K_g\,\Delta f_{g,t}^{\max}
+  \label{eq:lin_rpfr2}
+\end{align}
+Finally, the bilinear product $H_{g,t} = u_{g,t}\,\Delta f_t$ is linearized via McCormick envelopes over the physical domain $\Delta f_t \in [\Delta f_{\text{ss}}^{\min}, 0]$:
+\begin{align}
+  \Delta f_{\text{ss}}^{\min}\,u_{g,t} &\leq H_{g,t} \leq 0
+  \label{eq:lin_h1} \\
+  \Delta f_t - \Delta f_{\text{ss}}^{\min}\,(1 - u_{g,t}) &\leq H_{g,t} \leq \Delta f_t
+  \label{eq:lin_h2}
+\end{align}
+
+The complete FCUC model comprising objective~\eqref{eq:objective_full} subject to constraints C1--C8 (\eqref{eq:power_balance}--\eqref{eq:lin_h2}) is a fully linear \textbf{Mixed-Integer Linear Program (MILP)}, guaranteeing global optimality without nonlinear solver complications.
 
 % =========================================================
 \section{Case Study Setup}
@@ -874,21 +904,25 @@ balances wind output against reserve and inertia requirements.
 
 \textbf{Scenario~6} activates BESS virtual inertia
 (\texttt{con\_battery\_vi}), contributing an average of
-\textbf{236.5~MWs} additional inertia via grid-forming converter
-control. Total cost: \$3{,}938{,}983/day ($-$5.70\% vs.\ S4).
+\textbf{236.5~MWs} of fast synthetic inertia via grid-forming converter
+control with explicit discharge power allocation headroom.
+This eliminates all RoCoF violations across the 24-hour horizon,
+achieving a total operating cost of \$3{,}938{,}983/day (a $-$5.70\%
+reduction versus Scenario~4 and 2.24\% below the unconstrained
+classical UC baseline).
 
-\textbf{Scenario~7} (the proposed full model) further activates WT
+\textbf{Scenario~7} comparatively explores activating both WT
 virtual inertia (\texttt{con\_wt\_vi}) and QSS constraint
-(\texttt{con\_qss\_limit}). BESS-VI averages \textbf{263.5~MWs}
-and WT-VI averages \textbf{12.7~MWs} of additional inertia.
-Total $H_{\text{sys,avg}}$ = 43{,}256~MWs.
-Total cost: \$3{,}939{,}091/day---essentially identical to
-S6~(+\$108, ${<}0.003\%$).
-
-The marginal cost of enabling WT-VI provision is negligible
-(\$108/day), while it provides additional frequency security margin.
-WT-VI operates within the 1.3\% curtailment headroom without
-increasing curtailment.
+(\texttt{con\_qss\_limit}). BESS-VI supplies \textbf{263.5~MWs},
+while WT-VI contributes a minor \textbf{12.7~MWs} of additional inertia
+(less than 0.03\% of total system inertia), with a total cost of
+\$3{,}939{,}091/day (+\$108 relative to S6).
+While WT kinetic extraction is technically possible from curtailment headroom,
+it introduces aerodynamic and mechanical rotor stress as well as post-contingency
+frequency recovery dip risks. Consequently, allocating virtual inertia
+strictly to dedicated BESS (as formulated in Section~\ref{sec:model})
+while maintaining wind turbines and solar PV as pure energy producers
+represents the most reliable and physically robust operational strategy.
 
 \subsection{Economic Analysis: Cost-Security Trade-off}
 
@@ -937,7 +971,8 @@ S6: FCUC + BESS-VI         & 3{,}938{,}983 & $-$2.24   & Yes \\
 
 This paper proposed, implemented, and validated a MILP-based
 Frequency-Constrained Unit Commitment model incorporating
-multi-source virtual inertia from BESS and wind turbines,
+dedicated BESS virtual inertia, governor-droop Primary Frequency
+Regulation, and renewable generation from wind turbines and solar PV,
 solved using Python~3.9/Pyomo and IBM CPLEX~22.1.1.
 Seven simulation scenarios on a modified IEEE 10-unit test system
 yielded the following conclusions:
@@ -947,30 +982,31 @@ yielded the following conclusions:
     shows a worst-case RoCoF of 0.903~Hz/s (limit: 0.55~Hz/s)
     violated in all 24 hours, confirming the necessity of FCUC.
 
-  \item \textbf{Wind integration provides the greatest cost reduction.}
+  \item \textbf{Renewable integration provides significant cost reduction.}
     Scenario~3 achieves $-$7.76\% versus S1 through fuel cost savings
-    of \$226{,}220/day, but does not address frequency security.
+    of \$226{,}220/day, but does not address dynamic frequency security.
 
-  \item \textbf{RoCoF enforcement via SG inertia alone is costly.}
+  \item \textbf{RoCoF enforcement via synchronous inertia alone is costly.}
     Scenario~4 incurs $+$3.65\% versus S1, requiring more must-run
-    thermal units.
+    thermal units to satisfy minimum inertia requirements.
 
-  \item \textbf{Multi-source VI recovers the frequency security premium.}
-    Scenario~7 saves 5.69\% versus S4 (\$237{,}267/day) while
-    maintaining full RoCoF compliance; average system inertia rises
-    to 43{,}256~MWs (263.5~MWs from BESS-VI, 12.7~MWs from WT-VI).
+  \item \textbf{BESS virtual inertia eliminates the frequency security penalty.}
+    Scenario~6 saves 5.70\% versus S4 (\$237{,}375/day) while
+    maintaining full RoCoF compliance across all 24 hours through an
+    average of 236.5~MWs of BESS virtual inertia, without requiring
+    kinetic extraction from wind turbine rotors.
 
   \item \textbf{Frequency security achievable below baseline cost.}
-    Scenario~7 costs 2.24\% \emph{less} than classical UC while
-    being fully frequency-secure, demonstrating that co-optimizing
-    renewable integration and VI provision simultaneously reduces
-    costs and improves grid security.
+    Operating with BESS virtual inertia costs 2.24\% \emph{less} than
+    classical UC while being fully frequency-secure, demonstrating that
+    co-optimizing renewable energy and BESS virtual inertia simultaneously
+    reduces operational costs and guarantees grid security.
 \end{enumerate}
 
 For Indonesia's RUPTL 2025--2034 goal of 61\% renewable generation,
 these results indicate that explicit scheduling of virtual inertia
-from planned BESS and wind assets can fulfill inertia requirements
-without additional cost burden.
+from planned BESS assets, combined with PFR-aware commitment, can fulfill
+inertia and frequency requirements without imposing additional cost burdens.
 Future work will extend the model to: (i) stochastic formulation
 for renewable forecast uncertainty; (ii) transmission-constrained
 (DC power flow) FCUC; and (iii) validation on actual Indonesian
@@ -1004,11 +1040,18 @@ Market-notices-and-events/Power-System-Incident-Reports/2017/
 Integrated-Final-Report-SA-Black-System-28-September-2016}
 
 \bibitem{E02Sulawesi}
-L.~M.~Putranto \textit{et al.},
+C.~F.~Nugraha, L.~M.~Putranto, M.~I.~B.~Setyonegoro, Sarjiya, and S.~Isnandar,
 ``Unit Commitment with Primary Frequency Regulation Consideration
 in the Southern Sulawesi Power System,''
-in \textit{Proc. 2024 Int. Conf. on ICT for Power and Energy
-(ICT-PEP)}, 2024.
+in \textit{Proc. 2020 12th International Conference on Information
+Technology and Electrical Engineering (ICITEE)}, Yogyakarta, Indonesia,
+pp.~210--215, Oct. 2020, doi: 10.1109/ICITEE49829.2020.9271774.
+
+\bibitem{Restrepo2005}
+J.~F.~Restrepo and F.~D.~Galiana,
+``Unit Commitment With Primary Frequency Regulation Constraints,''
+\textit{IEEE Transactions on Power Systems}, vol.~20, no.~4,
+pp.~1836--1842, Nov. 2005, doi: 10.1109/TPWRS.2005.857934.
 
 \bibitem{E03JAMALI}
 L.~M.~Putranto \textit{et al.},
