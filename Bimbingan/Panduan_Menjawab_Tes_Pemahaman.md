@@ -65,11 +65,20 @@ $$2 \cdot \text{RoCoF}_{\lim} \cdot H_{\text{sys},t} \ge f_0 \cdot \text{Largest
 ### 4. Kopling Alokasi Konverter BESS (*Converter Headroom Coupling*)
 $$P_{b,t}^{\text{dis}} + \frac{P_{b,t}^{\text{VI}}}{\eta_b^{\text{VI}}} \le DR_b^{\max} \cdot u_{b,t}^{\text{dis}}, \quad \forall b, t$$
 
-* **Arti Fisis:**
-  * Inverter baterai memiliki batas fisik kapasitas arus/daya maksimum sebesar $DR_b^{\max}$.
-  * Baterai **tidak bisa** melakukan discharging penuh sebesar $DR^{\max}$ sekaligus menjanjikan respon inersia virtual sebesar $DR^{\max}$. Keduanya harus berbagi kapasitas (*headroom*).
-  * $\eta_b^{\text{VI}}$ adalah efisiensi konversi daya inersia virtual.
-  * Faktor $u_{b,t}^{\text{dis}} \in \{0, 1\}$ memastikan bahwa respon inersia virtual hanya dapat disediakan jika baterai tidak sedang dalam mode pengisian (*charging*).
+* **Apa itu $DR_b^{\max}$?**
+  * **$DR$ = *Discharge Rate*** (Laju / Batas Daya Pengosongan Maksimum).
+  * $DR_b^{\max}$ adalah **Kapasitas Rating Daya Inverter / Konverter Maksimum (*Maximum Converter Power Rating*)** dari unit BESS $b$, dinyatakan dalam satuan **Megawatt (MW)**. Ini adalah batasan fisik semu/arus tertinggi dari perangkat elektronika daya (*Power Conversion System / PCS*) baterai.
+  * Pasangannya adalah $CR_b^{\max}$ (*Charge Rate Maximum*), yaitu batas daya pengisian: $P_{b,t}^{\text{ch}} \le CR_b^{\max} \cdot u_{b,t}^{\text{ch}}$.
+
+* **Apa itu Konsep *Headroom* dan Mengapa Harus Dikopel?**
+  * ***Headroom* (Ruang Cadangan):** Adalah sisa kapasitas inverter yang sengaja disisakan agar sewaktu-waktu siap menyuntikkan daya respon inersia virtual ($P_{b,t}^{\text{VI}}$) saat frekuensi anjlok mendadak.
+  * **Analogi Fisis Nyata:** Jika konverter baterai memiliki kapasitas $DR_b^{\max} = 100\text{ MW}$, dan baterai sedang menjadwalkan discharging daya aktif untuk melayani beban sebesar $P_{b,t}^{\text{dis}} = 60\text{ MW}$, maka *headroom* sisa yang dapat dijanjikan untuk respon Virtual Inertia hanyalah sebesar:
+    $$\frac{P_{b,t}^{\text{VI}}}{\eta_b^{\text{VI}}} \le 100\text{ MW} - 60\text{ MW} = 40\text{ MW}$$
+  * **Bahaya jika Tidak Ada Persamaan Ini (*Klaim Ganda / Double Booking*):** Tanpa batasan ini, solver optimasi akan "berbuat curang" dengan menjadwalkan discharging penuh $100\text{ MW}$ untuk mencari keuntungan ekonomi, sekaligus menjanjikan inersia virtual $100\text{ MW}$. Saat gangguan $N-1$ terjadi, konverter baterai akan dipaksa mengalirkan total $200\text{ MW}$ (melebihi rating fisiknya), yang di dunia nyata akan menyebabkan inverter trip seketika karena *overcurrent/overload* dan memicu pemadaman sistem (*cascading blackout*).
+
+* **Peran Parameter Lainnya:**
+  * $\eta_b^{\text{VI}}$ (Efisiensi Konversi Inersia Virtual): Memperhitungkan rugi-rugi penyaklaran (*switching loss*) pada semikonduktor IGBT/SiC saat inverter merespons dinamika frekuensi cepat.
+  * $u_{b,t}^{\text{dis}} \in \{0, 1\}$ (Status Biner Discharging): Karena baterai mematuhi batasan tidak boleh mengisi dan mengosongkan daya secara bersamaan ($u_{b,t}^{\text{ch}} + u_{b,t}^{\text{dis}} \le 1$), maka saat baterai sedang charging ($u_{b,t}^{\text{ch}} = 1$), otomatis $u_{b,t}^{\text{dis}} = 0$. Akibatnya, $P_{b,t}^{\text{VI}}$ dipaksa 0 karena inverter sedang menarik daya masuk ke baterai dan tidak dapat menginjeksi inersia ke kisi.
 
 ---
 

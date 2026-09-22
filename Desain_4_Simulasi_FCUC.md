@@ -66,9 +66,9 @@ Mengacu pada 10 constraint dasar UC Konvensional (dari lembar konfigurasi) ditam
   Kapasitas converter baterai ($DR_b^{\max}$) dialokasikan bersama untuk discharging daya aktif dan cadangan daya inersia virtual:
   $$P_{b,t}^{\text{dis}} + \frac{P_{b,t}^{\text{VI}}}{\eta_b^{\text{VI}}} \le DR_b^{\max} \cdot u_{b,t}^{\text{dis}}$$
 * **Kontribusi Inersia Sistem:**
-  $$H_{\text{batt\_vi},t} = \sum_{b \in \text{BATT}} K_b^{\text{VI}} \cdot P_{b,t}^{\text{VI}}$$
-  $$H_{\text{sys},t} = \sum_{g=1}^{10} H_g P_g^{\max} u_{g,t} + H_{\text{batt\_vi},t}$$
-* **Dampak Tekno-Ekonomi:** Keberadaan $H_{\text{batt\_vi}}$ mensubstitusi inersia mekanik generator termal. Unit-unit termal yang mahal yang sebelumnya wajib menyala di Simulasi 1 & 2 kini **bisa dimatikan (*de-commitment*)**, sehingga biaya operasi termal turun signifikan tanpa melanggar batasan RoCoF.
+  $$H_{\text{BESS},t} = \sum_{b \in \text{BATT}} K_b^{\text{VI}} \cdot P_{b,t}^{\text{VI}}$$
+  $$H_{\text{sys},t} = \sum_{g=1}^{10} H_g P_g^{\max} u_{g,t} + H_{\text{BESS},t}$$
+* **Dampak Tekno-Ekonomi:** Keberadaan $H_{\text{BESS},t}$ mensubstitusi inersia mekanik generator termal. Unit-unit termal yang mahal yang sebelumnya wajib menyala di Simulasi 1 & 2 kini **bisa dimatikan (*de-commitment*)**, sehingga biaya operasi termal turun signifikan tanpa melanggar batasan RoCoF.
 * **Status EBT:** Belum ada (WT = 0 MW, PV = 0 MW).
 
 ---
