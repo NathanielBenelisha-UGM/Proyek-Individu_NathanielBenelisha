@@ -21,7 +21,7 @@
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/NathanielBenelisha-UGM/Proyek-Individu_NathanielBenelisha/main/Paper/figures/fig_cost_comparison.png" alt="Project Banner" width="850" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" onerror="this.style.display='none'"/>
+  <img src="repo-header.png" alt="Project Banner" width="850" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" onerror="this.style.display='none'"/>
 </p>
 
 # ⚡ Frequency-Constrained Unit Commitment with Battery Virtual Inertia & Primary Frequency Regulation
