@@ -8,13 +8,14 @@
 >
 > | Tanggal | Tahap | Status | Keterangan Singkat |
 > |---|---|:---:|---|
+> | 24 Sep 2026 | **Tahap 5** — Manuskrip Paper v3 | ✅ Done | Naskah `Paper/main_v3.tex`, kompilasi 11 hal `PI_Draf6.pdf`, struktur 4 skenario baru, tabel numerik lengkap, 13 figure IEEE & DIgSILENT |
 > | 24 Sep 2026 | **Tahap 4** — Persiapan DIgSILENT N-1 | ✅ Done | Ekspor 9 dispatch CSV, 27 test cases, skrip otomasi Python API PF |
 > | 24 Sep 2026 | **Tahap 3** — Visualisasi IEEE | ✅ Done | 10 figure PDF 300 DPI di `Paper/figures/` (cost, dispatch, UC heatmap, BESS VI, inertia, freq security, curtailment) |
 > | 24 Sep 2026 | **Tahap 2** — Analisis Numerik | ✅ Done | Tabel komparasi biaya, inersia, UC; analisis mendalam S3 vs S4; penghematan S4 = $243,257 (5.74%) |
 > | 23 Sep 2026 | **Tahap 1** — MILP 4 Skenario | ✅ Done | `run_4_simulations.py` v2; S1–S4 semua OPTIMAL via CPLEX 22.1.1 |
 > | 21 Sep 2026 | Bimbingan Pak Lesnanto | ✅ Done | Review formulasi, pemodelan WT/PV sbg pengotor zero-inertia, rencana DIgSILENT |
 >
-> **Next:** Tahap 5 — Update manuskrip paper `Paper/main_v3.tex` dengan hasil 4 skenario & figures baru  
+> **Next:** Eksekusi simulasi dinamis RMS/EMT di DIgSILENT PowerFactory (27 test cases kontingensi N-1) & persiapan materi bimbingan Pak Lesnanto  
 > **Oleh:** Nathaniel Benelisha &nbsp;|&nbsp; **Pembimbing:** Ir. Lesnanto Multa Putranto, Ph.D., IPM.
 
 ---
@@ -26,7 +27,7 @@
 # ⚡ Frequency-Constrained Unit Commitment with Battery Virtual Inertia & Primary Frequency Regulation
 
 <p align="center">
-  <a href="#-naskah-publikasi-terbaru-latest-draft"><img src="https://img.shields.io/badge/Paper_Draft-v5_Active-007ACC?style=for-the-badge&logo=read-the-docs&logoColor=white" alt="Paper Draft"/></a>
+  <a href="#-naskah-publikasi-terbaru-latest-draft"><img src="https://img.shields.io/badge/Paper_Draft-v6_Active-007ACC?style=for-the-badge&logo=read-the-docs&logoColor=white" alt="Paper Draft"/></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.9-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9"/></a>
   <a href="http://www.pyomo.org/"><img src="https://img.shields.io/badge/Pyomo-6.9.5-FF6F00?style=for-the-badge" alt="Pyomo"/></a>
   <a href="https://www.ibm.com/analytics/cplex-optimizer"><img src="https://img.shields.io/badge/IBM_CPLEX-22.1.1-052FAD?style=for-the-badge&logo=ibm&logoColor=white" alt="CPLEX"/></a>
@@ -54,10 +55,10 @@
 > ### 📢 **MANUSKRIP TERAKHIR DAPAT DIAKSES LANGSUNG:**
 > 
 > Seluruh pembaruan paper ilmiah secara konsisten diunggah pada repositori ini:
-> * 📥 **[Buka / Unduh Naskah Draf Terbaru: PI_Draf5.pdf (Klik Disini)](Paper/PI_Draf5.pdf)**
+> * 📥 **[Buka / Unduh Naskah Draf Terbaru: PI_Draf6.pdf (Klik Disini)](Paper/PI_Draf6.pdf)**
 > * 🔗 **[Permanent Pointer: LATEST_DRAFT.pdf](Paper/LATEST_DRAFT.pdf)**
 >
-> *Status: **Draf 5 (Aktif)** — Penyelarasan formulasi biaya linear & PFR berdasarkan referensi `[E02]` ICITEE 2020, pemodelan inersia virtual khusus BESS dengan kopling alokasi daya discharging, neraca daya dengan PLTB & PLTS, serta validasi simulasi transien di DIgSILENT PowerFactory pada sistem IEEE 24-bus ekivalen 10 generator.*
+> *Status: **Draf 6 (Aktif — Tahap 5 Selesai)** — Pembaruan struktur 4 skenario simulasi baru (S1--S4), integrasi tabel komparasi numerik lengkap hasil solver CPLEX 22.1.1, 10 grafik IEEE 300 DPI, dan validasi transien kontingensi N-1 serta reclosure di DIgSILENT PowerFactory.*
 
 ---
 
