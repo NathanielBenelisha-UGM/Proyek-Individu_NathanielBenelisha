@@ -1,0 +1,25 @@
+# DIgSILENT PowerFactory — Initial Conditions
+# Scenario: S1 | Hour: t=01 | Jam lembah, RoCoF paling kritis, WT curtailment
+# scenario: S1
+# hour: 1
+# demand_MW: 4225.677
+# Hsys_MWs: 50295.0
+# LargestLoss_MW: 1056.0
+# TotalPFR_MW: 3540.323
+# RoCoF_est_Hz_s: 0.524903
+# f_QSS_est_Hz: 49.7052
+# H_required_MWs: 48000.0
+#
+object_name,object_class,bus,type,H_const,Pmax_MW,Pmin_MW,P_dispatch_MW,Q_dispatch_MVAr,status_on,reserve_MW,loading_pct,SOC_MWh,P_VI_MW,Kb_VI,H_VI_MWs
+G1,ElmSym,Bus_G1,PLTU,4.0,1176.0,100.0,1056.0,0.0,1,120.0,89.8,,,,
+G2,ElmSym,Bus_G2,PLTGU,9.0,1125.0,200.0,340.0,0.0,1,785.0,30.22,,,,
+G3,ElmSym,Bus_G3,PLTU,4.0,969.0,80.0,657.827,0.0,1,311.173,67.89,,,,
+G4,ElmSym,Bus_G4,PLTG,6.0,130.0,20.0,0.0,0.0,0,0.0,0.0,,,,
+G5,ElmSym,Bus_G5,PLTG,6.0,108.0,20.0,66.0,0.0,1,42.0,61.11,,,,
+G6,ElmSym,Bus_G6,PLTGU,9.0,1095.0,200.0,250.0,0.0,1,845.0,22.83,,,,
+G7,ElmSym,Bus_G7,PLTGU,9.0,810.0,80.0,248.0,0.0,1,562.0,30.62,,,,
+G8,ElmSym,Bus_G8,PLTGU,9.0,773.0,80.0,347.85,0.0,1,425.15,45.0,,,,
+G9,ElmSym,Bus_G9,PLTU,4.0,870.0,80.0,660.0,0.0,1,210.0,75.86,,,,
+G10,ElmSym,Bus_G10,PLTU,4.0,840.0,80.0,600.0,0.0,1,240.0,71.43,,,,
+B1,ElmBatt,Bus_B1,BESS_LFP,0.0,60.0,-60.0,0.0,0.0,0,0.0,0.0,15.5,0.0,4.0,0.0
+B2,ElmBatt,Bus_B2,BESS_LFP,0.0,20.0,-20.0,0.0,0.0,0,0.0,0.0,25.0,0.0,5.0,0.0

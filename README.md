@@ -1,3 +1,24 @@
+<!-- ═══════════════════════════════════════════════════════════════
+     PROGRESS LOG — Untuk monitoring dosen pembimbing
+     Update setiap kali ada progress baru yang di-push ke repo
+     ═══════════════════════════════════════════════════════════════ -->
+
+> [!NOTE]
+> ## 📋 Progress Log — Last Updated: **24 September 2026**
+>
+> | Tanggal | Tahap | Status | Keterangan Singkat |
+> |---|---|:---:|---|
+> | 24 Sep 2026 | **Tahap 4** — Persiapan DIgSILENT N-1 | ✅ Done | Ekspor 9 dispatch CSV, 27 test cases, skrip otomasi Python API PF |
+> | 24 Sep 2026 | **Tahap 3** — Visualisasi IEEE | ✅ Done | 10 figure PDF 300 DPI di `Paper/figures/` (cost, dispatch, UC heatmap, BESS VI, inertia, freq security, curtailment) |
+> | 24 Sep 2026 | **Tahap 2** — Analisis Numerik | ✅ Done | Tabel komparasi biaya, inersia, UC; analisis mendalam S3 vs S4; penghematan S4 = $243,257 (5.74%) |
+> | 23 Sep 2026 | **Tahap 1** — MILP 4 Skenario | ✅ Done | `run_4_simulations.py` v2; S1–S4 semua OPTIMAL via CPLEX 22.1.1 |
+> | 21 Sep 2026 | Bimbingan Pak Lesnanto | ✅ Done | Review formulasi, pemodelan WT/PV sbg pengotor zero-inertia, rencana DIgSILENT |
+>
+> **Next:** Tahap 5 — Update manuskrip paper `Paper/main_v3.tex` dengan hasil 4 skenario & figures baru  
+> **Oleh:** Nathaniel Benelisha &nbsp;|&nbsp; **Pembimbing:** Ir. Lesnanto Multa Putranto, Ph.D., IPM.
+
+---
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/NathanielBenelisha-UGM/Proyek-Individu_NathanielBenelisha/main/Paper/figures/fig_cost_comparison.png" alt="Project Banner" width="850" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" onerror="this.style.display='none'"/>
 </p>
@@ -176,16 +197,79 @@ Untuk memastikan hasil optimasi aljabar tidak hanya optimal di atas kertas melai
 
 ---
 
-## 📈 Roadmap & Progres Penelitian
+## 📈 Roadmap & Progres Penelitian (Pipeline 5 Tahap)
 
-- [x] **Tahap 1:** Reverse-engineering dan perumusan model MILP FCUC pada Pyomo dengan IBM CPLEX 22.1.1.
-- [x] **Tahap 2:** Eksekusi penuh 7 skenario simulasi numerik dan analisis tekno-ekonomi komparatif.
-- [x] **Tahap 3:** Penyelarasan matematis fungsi objektif biaya linear dan regulasi frekuensi primer (PFR) sesuai referensi `[E02]` ICITEE 2020.
-- [x] **Tahap 4:** Pemodelan inersia virtual khusus BESS dengan *converter headroom coupling* daya discharging.
-- [x] **Tahap 5:** Integrasi pemodelan neraca daya multi-sumber mencakup Solar PV dan Wind Turbine.
-- [x] **Tahap 6:** Penyusunan manuskrip publikasi ilmiah standar IEEEtran (Draf 1 hingga Draf 5).
-- [ ] **Tahap 7:** Simulasi dinamis RMS domain waktu pada DIgSILENT PowerFactory untuk validasi respon transien frekuensi.
-- [ ] **Tahap 8:** Finalisasi naskah publikasi dan submit ke jurnal/konferensi internasional bereputasi (IEEE / MDPI).
+> **Pipeline aktif** berdasarkan rencana bimbingan September 2026
+
+- [x] **Tahap 1:** Implementasi MILP 4 Skenario — `run_4_simulations.py` v2 dengan pemodelan PV & WT pengotor, batasan QSS & PFR, solver CPLEX. Semua 4 skenario **OPTIMAL**.
+- [x] **Tahap 2:** Ekstraksi hasil numerik — tabel komparasi biaya, inersia, unit commitment, dispatch BESS; analisis mendalam S3 vs S4.
+- [x] **Tahap 3:** Visualisasi IEEE — 10 figure publikasi (300 DPI, PDF) di `Paper/figures/`: cost, dispatch stack, UC heatmap, BESS VI, inertia/RoCoF, freq security, curtailment, SOC, reserve.
+- [x] **Tahap 4:** Persiapan DIgSILENT — 9 dispatch CSV + 27 test cases N-1 contingency; skrip otomasi Python API PowerFactory 2024.
+- [ ] **Tahap 5:** Update manuskrip `Paper/main_v3.tex` dengan tabel, figures, dan analisis hasil 4 skenario.
+
+*(Pipeline lama — arsip referensi):*
+- [x] ~~Tahap A:~~ Formulasi MILP FCUC Pyomo + CPLEX (notebook)
+- [x] ~~Tahap B:~~ Eksekusi 7 skenario numerik + analisis tekno-ekonomi
+- [x] ~~Tahap C:~~ Penyelarasan formulasi biaya & PFR (ref. ICITEE 2020)
+- [x] ~~Tahap D:~~ Pemodelan inersia virtual BESS + converter headroom coupling
+- [x] ~~Tahap E:~~ Integrasi neraca daya multi-sumber (PV, WT)
+- [x] ~~Tahap F:~~ Penyusunan manuskrip IEEEtran (Draf 1–5)
+- [ ] **Tahap G:** Simulasi transien DIgSILENT (lanjutan Tahap 4)
+- [ ] **Tahap H:** Finalisasi & submit jurnal/konferensi IEEE
+
+---
+
+## 📂 Struktur Repositori
+
+```
+📁 Proyek-Individu_NathanielBenelisha/
+│
+├── 📄 README.md                            # Dokumentasi utama & progress log
+├── 📄 Desain_4_Simulasi_FCUC.md           # Desain 4 skenario simulasi MILP
+├── 📄 Laporan_Progres_Bimbingan_Pak_Lesnanto.md
+│
+├── 📁 Bimbingan/                           # Dokumentasi bimbingan & laporan
+│   ├── 📄 README.md
+│   ├── 📄 Analisis_Tahap2_FCUC.md         # ⭐ Laporan analisis 4 skenario
+│   ├── 📄 Analisis_Hasil_4_Simulasi.xlsx  # Data numerik lengkap
+│   └── 📄 Tahap4_DigSilent_Guide.md       # Panduan DIgSILENT N-1
+│
+├── 📁 Paper/                               # Naskah manuskrip & figures
+│   ├── 📥 PI_Draf5.pdf                     # ⭐ Draf terbaru
+│   ├── 🔗 LATEST_DRAFT.pdf
+│   ├── 📁 figures/                         # ⭐ 10 IEEE figures (300 DPI PDF)
+│   │   ├── fig1_cost_comparison.pdf
+│   │   ├── fig2_dispatch_S1.pdf
+│   │   ├── fig3_dispatch_S4.pdf
+│   │   ├── fig4_uc_heatmap.pdf
+│   │   ├── fig5_bess_vi.pdf
+│   │   ├── fig6_inertia_rocof.pdf
+│   │   ├── fig7_freq_security_S3vsS4.pdf
+│   │   ├── fig8_curtailment_S4.pdf
+│   │   ├── fig9_bess_soc_vi.pdf
+│   │   └── fig10_reserve_profile.pdf
+│   └── 📄 README.md
+│
+├── 📁 Coding/                              # Source code & dataset
+│   ├── 📄 run_4_simulations.py            # ⭐ MILP 4 skenario (Tahap 1)
+│   ├── 📄 analyze_4_simulations.py        # Analisis numerik (Tahap 2)
+│   ├── 📄 plot_4_simulations.py           # IEEE figures (Tahap 3)
+│   ├── 📄 export_dispatch_for_digsilent.py# Ekspor data UC → DIgSILENT
+│   ├── 📄 digsilent_n1_contingency.py     # Otomasi PF Python API (Tahap 4)
+│   ├── 📄 Hasil_UC_4_Simulasi_Summary.xlsx# Data hasil 4 skenario (5 sheet)
+│   ├── 📄 Analisis_Hasil_4_Simulasi.xlsx  # Data analisis (6 sheet)
+│   ├── 📄 DataSet_ModifikasiCandra_R02.xlsx# Dataset parameter sistem
+│   ├── 📄 Coba_16_20260612_R00_*.ipynb    # Notebook utama (referensi)
+│   └── 📁 DigSilent/                      # Data & test cases DIgSILENT
+│       ├── dispatch_critical_hours.xlsx
+│       ├── contingency_test_matrix.csv    # 27 N-1 test cases
+│       ├── dispatch_S1/S3/S4_t*.csv      # 9 snapshot kondisi awal
+│       └── Results/                       # Output simulasi transien
+│
+├── 📁 DigSilent/                           # Mirror data DIgSILENT (Tahap 4)
+├── 📁 Referensi/                           # Koleksi literatur (84 paper)
+└── 📁 CAPSTONE/                            # Dokumen Capstone Design
+```
 
 ---
 
